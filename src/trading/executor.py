@@ -65,7 +65,7 @@ class TradeExecutor:
                 key=pk,
                 chain_id=137,  # Polygon
                 funder=settings.polymarket_funder_address,  # Proxy Address for funding
-                signature_type=2,  # POLY_GNOSIS_SAFE (Proxy Trading)
+                signature_type=1,  # POLY_PROXY (Try output type 1 for Proxy)
             )
 
             # API credentials
@@ -193,7 +193,7 @@ class TradeExecutor:
         # Try API
         bal_api = 0.0
         try:
-            params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL, signature_type=2)
+            params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL, signature_type=1)
             balance_resp = self.client.get_balance_allowance(params)
             if balance_resp:
                 bal_api = float(balance_resp.get("balance", "0")) / 1e6
