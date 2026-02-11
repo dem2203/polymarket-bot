@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import OrderArgs, ApiCreds
+from py_clob_client.clob_types import OrderArgs, ApiCreds, BalanceAllowanceParams, AssetType
 from py_clob_client.order_builder.constants import BUY, SELL
 
 from src.config import settings
@@ -59,6 +59,7 @@ class TradeExecutor:
                 key=pk,
                 chain_id=137,  # Polygon
                 funder=settings.polymarket_funder_address,  # Proxy Address for funding
+                signature_type=2,  # POLY_GNOSIS_SAFE (Proxy Trading)
             )
 
             # API credentials
@@ -185,9 +186,15 @@ class TradeExecutor:
 
         try:
             # CLOB API'den bakiye al
-            balance = self.client.get_balance_allowance()
-            if balance:
-                return float(balance.get("balance", settings.starting_balance))
+            params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL, signature_type=2)
+            balance_resp = self.client.get_balance_allowance(params)
+            
+            if balance_resp:
+                # API returns string balance in collateral decimals (6 for USDC)
+                # But wait, does it return raw integer or formatted?
+                # Usually raw integer string.
+                bal_raw = float(balance_resp.get("balance", "0"))
+                return bal_raw / 1e6 # Convert from 6 decimals
         except Exception as e:
             logger.warning(f"Bakiye sorgu hatası: {e}")
 
