@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     polymarket_api_key: str = ""
     polymarket_api_secret: str = ""
     polymarket_passphrase: str = ""
-    polymarket_funder_address: str = ""
+    polymarket_funder_address: str = "0x04c03aac02601586cdd007f96bcfe03c3b5b12bf"  # Proxy Address (Funds here!)
 
     # ---- Telegram ----
     telegram_bot_token: str = ""

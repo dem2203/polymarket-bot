@@ -57,7 +57,12 @@ def check_and_approve():
         account = Account.from_key(pk)
         my_address = account.address
         
+        # Proxy Adresi (Kullanıcıdan alınan)
+        proxy_address = settings.polymarket_funder_address
+        
         logger.info(f"💳 Cüzdan kontrol ediliyor: {my_address}")
+        if proxy_address:
+            logger.info(f"🔑 Proxy Cüzdanı (Fon Kaynağı): {proxy_address}")
         
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
@@ -67,13 +72,20 @@ def check_and_approve():
         usdc = w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
         
         # 1. Check Balance (Diagnostic)
-        balance = usdc.functions.balanceOf(my_address).call()
-        logger.info(f"💰 EOA USDC Bakiye: {balance / 1e6:.2f} USDC")
+        eoa_bal = usdc.functions.balanceOf(my_address).call()
+        logger.info(f"💰 EOA USDC Bakiye: {eoa_bal / 1e6:.2f} USDC")
 
-        if balance < 1000000: # Less than 1 USDC
-            logger.warning("⚠️ EOA Bakiyesi çok düşük (< 1 USDC). Eğer Proxy kullanıyorsan sorun yok.")
+        if proxy_address:
+            proxy_bal = usdc.functions.balanceOf(proxy_address).call()
+            logger.info(f"💰 Proxy USDC Bakiye: {proxy_bal / 1e6:.2f} USDC")
+            
+            if proxy_bal < 1000000:
+                 logger.warning("⚠️ Proxy Bakiyesi de düşük!")
+        else:
+            if eoa_bal < 1000000: 
+                logger.warning("⚠️ EOA Bakiyesi çok düşük (< 1 USDC). Proxy adresin config içinde yok!")
 
-        # Approve edilecek TÜM kontratlar (Doğru adresler)
+        # Approve Checks
         targets = [
             ("CTF Exchange", CTF_EXCHANGE),
             ("Neg Risk Exchange", NEG_RISK_EXCHANGE),
@@ -82,14 +94,32 @@ def check_and_approve():
 
         MAX_UINT256 = 2**256 - 1
 
+        # Check EOA Allowances (Needed for signing?)
+        # Actually, for Proxy Trading, the Proxy needs allowance.
+        # But we can't easily approve FOR the proxy here without Gnosis SDK.
+        # So we just diagnose Proxy Allowance.
+        
+        if proxy_address:
+            logger.info("🔍 Proxy Allowance Kontrol Ediliyor...")
+            for name, spender in targets:
+                allowance = usdc.functions.allowance(proxy_address, spender).call()
+                logger.info(f"🔓 Proxy -> {name}: {allowance / 1e6:.2f} USDC")
+                
+                if allowance < 1000 * 1e6:
+                    logger.warning(f"⚠️ Proxy'nin {name} için izni YOK/AZ! (Polymarket UI'dan 'Enable Trading' yapmalısın)")
+                else:
+                    logger.info(f"✅ Proxy -> {name} izni TAMAM.")
+
+        # Check EOA Allowances (Just in case)
+        logger.info("🔍 EOA Allowance Kontrol Ediliyor...")
         for name, spender in targets:
             # Mevcut izni kontrol et
             try:
                 allowance = usdc.functions.allowance(my_address, spender).call()
-                logger.info(f"🔓 {name} Allowance: {allowance / 1e6:.2f} USDC")
+                logger.info(f"🔓 EOA -> {name}: {allowance / 1e6:.2f} USDC")
 
                 if allowance < 1000 * 1e6:
-                    logger.info(f"⚙️ {name} allowance artırılıyor (Unlimited)...")
+                    logger.info(f"⚙️ EOA -> {name} allowance artırılıyor...")
                     
                     # Transaction hazırla
                     nonce = w3.eth.get_transaction_count(my_address)
@@ -115,13 +145,10 @@ def check_and_approve():
                         continue
 
                     tx_hash = w3.eth.send_raw_transaction(raw_tx)
-                    
-                    logger.info(f"✅ {name} Approve TX gönderildi: {w3.to_hex(tx_hash)}")
-                    logger.info("⏳ Onay bekleniyor... (5sn)")
-                    
-                    time.sleep(5) 
+                    logger.info(f"✅ Approve TX gönderildi: {w3.to_hex(tx_hash)}")
+                    time.sleep(2) 
                 else:
-                    logger.info(f"✅ {name} allowance yeterli.")
+                    logger.info(f"✅ EOA -> {name} izni TAMAM.")
                     
             except Exception as e:
                 logger.error(f"❌ {name} işlem hatası: {e}")
