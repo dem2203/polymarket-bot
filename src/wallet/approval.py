@@ -12,6 +12,7 @@ RPC_URL = "https://polygon-rpc.com"
 USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC.e (Bridged)
 CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"  # Polymarket Exchange
 NEG_RISK_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"  # Neg Risk Adapter
+CONDITIONAL_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" # Conditional Tokens Framework
 
 # Minimal ERC20 ABI for approve/allowance
 ERC20_ABI = [
@@ -38,7 +39,7 @@ ERC20_ABI = [
 ]
 
 def check_and_approve():
-    """USDC için Polymarket Exchange ve Neg Risk Adapter'e harcama izni ver."""
+    """USDC için Polymarket Exchange, Neg Risk Adapter ve CTF'ye harcama izni ver."""
     if not settings.polymarket_private_key:
         logger.warning("Private key yok, approval atlanıyor.")
         return
@@ -50,7 +51,7 @@ def check_and_approve():
         my_address = account.address
         
         logger.info(f"💳 Cüzdan kontrol ediliyor: {my_address}")
-
+        
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected():
             logger.error("❌ Polygon RPC bağlantısı başarısız.")
@@ -58,10 +59,11 @@ def check_and_approve():
 
         usdc = w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
         
-        # Approve edilecek kontratlar
+        # Approve edilecek TÜM kontratlar
         targets = [
             ("CTF Exchange", CTF_EXCHANGE),
-            ("Neg Risk Adapter", NEG_RISK_ADAPTER)
+            ("Neg Risk Adapter", NEG_RISK_ADAPTER),
+            ("Conditional Token Framework", CONDITIONAL_TOKENS)
         ]
 
         MAX_UINT256 = 2**256 - 1
@@ -76,13 +78,16 @@ def check_and_approve():
                     logger.info(f"🔓 {name} allowance artırılıyor (Unlimited)...")
                     
                     # Transaction hazırla
-                    nonce = w3.eth.get_transaction_count(my_address) # Dikkat: Nonce takibi gerekebilir
+                    nonce = w3.eth.get_transaction_count(my_address)
                     
+                    # Gaz fiyatını biraz artır (hızlı onay için)
+                    gas_price = int(w3.eth.gas_price * 1.1)
+
                     tx = usdc.functions.approve(spender, MAX_UINT256).build_transaction({
                         'from': my_address,
                         'nonce': nonce,
                         'gas': 100000,
-                        'gasPrice': w3.eth.gas_price,
+                        'gasPrice': gas_price,
                     })
                     
                     # İmzala ve gönder
