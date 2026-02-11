@@ -29,10 +29,31 @@ class AIBrain:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_api_calls = 0
+        self.total_failures = 0
+        self.last_error = ""
 
         # Claude Haiku 4.5 fiyatları (USD per million tokens)
         self.input_cost_per_m = 1.0    # $1 / M input tokens
         self.output_cost_per_m = 5.0   # $5 / M output tokens
+
+    def health_check(self) -> dict:
+        """
+        Startup health check — Claude API'yi test et.
+        Returns: {"ok": bool, "model": str, "error": str}
+        """
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=30,
+                messages=[{"role": "user", "content": "Reply with: OK"}],
+            )
+            text = response.content[0].text.strip()
+            logger.info(f"✅ AI Health Check: {self.model} — {text}")
+            return {"ok": True, "model": self.model, "response": text, "error": ""}
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"❌ AI Health Check FAILED: {error_msg}")
+            return {"ok": False, "model": self.model, "response": "", "error": error_msg}
 
     @property
     def total_api_cost(self) -> float:
@@ -110,12 +131,18 @@ class AIBrain:
             }
 
         except json.JSONDecodeError as e:
+            self.total_failures += 1
+            self.last_error = f"JSON parse: {e}"
             logger.warning(f"AI yanıtı parse edilemedi: {e}")
             return None
         except anthropic.APIError as e:
+            self.total_failures += 1
+            self.last_error = f"API: {e}"
             logger.error(f"Claude API hatası: {e}")
             return None
         except Exception as e:
+            self.total_failures += 1
+            self.last_error = f"Genel: {e}"
             logger.error(f"AI analiz hatası: {e}")
             return None
 
@@ -173,4 +200,6 @@ class AIBrain:
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
             "total_api_cost_usd": round(self.total_api_cost, 4),
+            "total_failures": self.total_failures,
+            "last_error": self.last_error,
         }

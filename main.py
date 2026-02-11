@@ -114,7 +114,27 @@ class PolymarketBot:
         # Ön kontroller
         if not settings.has_anthropic_key:
             logger.error("❌ ANTHROPIC_API_KEY ayarlanmamış!")
+            await self.telegram.send("❌ ANTHROPIC_API_KEY ayarlanmamış! Bot duruyor.")
             return
+
+        # AI Health Check
+        logger.info("🧠 AI Health Check yapılıyor...")
+        health = self.brain.health_check()
+        if health["ok"]:
+            logger.info(f"✅ AI hazır: {health['model']} — {health['response']}")
+            await self.telegram.send(
+                f"✅ <b>AI Health Check BAŞARILI</b>\n"
+                f"Model: {health['model']}\n"
+                f"Yanıt: {health['response']}"
+            )
+        else:
+            logger.error(f"❌ AI HATA: {health['error']}")
+            await self.telegram.send(
+                f"❌ <b>AI Health Check BAŞARISIZ!</b>\n"
+                f"Model: {health['model']}\n"
+                f"Hata: <code>{health['error'][:500]}</code>\n\n"
+                f"⚠️ Bot çalışmaya devam edecek ama AI analiz yapılamayacak!"
+            )
 
         # Bakiye sorgula
         self.balance = self.executor.get_balance()
@@ -223,19 +243,22 @@ class PolymarketBot:
 
         # 6. Döngü raporu
         cycle_time = time.time() - cycle_start
+        ai_report = self.brain.get_cost_report()
         report = {
             "scanned": len(markets) if markets else 0,
             "filtered": len(markets_to_analyze),
-            "analyzed": min(max_analyze, len(markets_to_analyze)),
+            "analyzed": self.brain.total_api_calls,
             "signals": len(signals),
             "trades": trades_executed,
             "api_cost": cycle_api_cost,
+            "failures": ai_report["total_failures"],
+            "last_error": ai_report["last_error"],
         }
 
         logger.info(
             f"📊 Döngü #{self.cycle_count} tamamlandı ({cycle_time:.1f}s) | "
             f"Sinyal: {len(signals)} | Trade: {trades_executed} | "
-            f"API: ${cycle_api_cost:.4f}"
+            f"API: ${cycle_api_cost:.4f} | Hata: {ai_report['total_failures']}"
         )
 
         # Her 6 döngüde ekonomi raporu (1 saat)

@@ -105,6 +105,10 @@ class TelegramNotifier:
 
     async def notify_scan_report(self, report: dict):
         """Tarama raporu bildirimi."""
+        failures = report.get('failures', 0)
+        last_error = report.get('last_error', '')
+        error_line = f"\n⚠️ AI Hata: {failures} | Son: {last_error[:100]}" if failures > 0 else ""
+
         await self.send(
             f"📡 <b>TARAMA RAPORU</b>\n\n"
             f"Taranan market: {report.get('scanned', 0)}\n"
@@ -113,6 +117,7 @@ class TelegramNotifier:
             f"Sinyal bulunan: {report.get('signals', 0)}\n"
             f"Trade açılan: {report.get('trades', 0)}\n"
             f"API maliyeti: ${report.get('api_cost', 0):.4f}"
+            f"{error_line}"
         )
 
     async def notify_economics_report(self, report: str):
