@@ -38,6 +38,10 @@ from src.trading.risk import RiskManager
 from src.economics.tracker import EconomicsTracker
 from src.notifications.telegram import TelegramNotifier
 
+# Log dosyası dizini — MUST be before FileHandler
+import os
+os.makedirs("logs", exist_ok=True)
+
 # ---- Logging Setup ----
 logging.basicConfig(
     level=logging.INFO,
@@ -49,10 +53,6 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("bot")
-
-# Log dosyası dizini
-import os
-os.makedirs("logs", exist_ok=True)
 
 
 # ---- Health Check Server ----
@@ -319,14 +319,14 @@ class PolymarketBot:
 
 async def main():
     """Entry point."""
+    # Health check (Railway için) — ÖNCE başlat, bot init uzun sürebilir
+    start_health_server()
+
     bot = PolymarketBot()
 
     # Graceful shutdown
     signal.signal(signal.SIGINT, bot.shutdown)
     signal.signal(signal.SIGTERM, bot.shutdown)
-
-    # Health check (Railway için)
-    start_health_server()
 
     await bot.start()
 
