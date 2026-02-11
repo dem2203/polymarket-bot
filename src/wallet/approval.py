@@ -11,8 +11,14 @@ logger = logging.getLogger("bot.wallet")
 RPC_URL = "https://polygon-rpc.com"
 USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC.e (Bridged)
 CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"  # Polymarket Exchange
-NEG_RISK_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"  # Neg Risk Adapter
-CONDITIONAL_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" # Conditional Tokens Framework
+
+# Doğru Neg Risk Exchange (Mainnet: 137)
+# py_clob_client/config.py -> 0xC5d563A36AE78145C45a50134d48A1215220f80a
+NEG_RISK_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a"  
+
+# Conditional Tokens Framework (CTF)
+# py_clob_client/config.py -> 0x4D97DCd97eC945f40cF65F87097ACe5EA0476045
+CONDITIONAL_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 
 # Minimal ERC20 ABI for approve/allowance
 ERC20_ABI = [
@@ -39,7 +45,7 @@ ERC20_ABI = [
 ]
 
 def check_and_approve():
-    """USDC için Polymarket Exchange, Neg Risk Adapter ve CTF'ye harcama izni ver."""
+    """USDC için Polymarket Exchange, Neg Risk Exchange ve CTF'ye harcama izni ver."""
     if not settings.polymarket_private_key:
         logger.warning("Private key yok, approval atlanıyor.")
         return
@@ -59,10 +65,10 @@ def check_and_approve():
 
         usdc = w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
         
-        # Approve edilecek TÜM kontratlar
+        # Approve edilecek TÜM kontratlar (Doğru adresler)
         targets = [
             ("CTF Exchange", CTF_EXCHANGE),
-            ("Neg Risk Adapter", NEG_RISK_ADAPTER),
+            ("Neg Risk Exchange", NEG_RISK_EXCHANGE),
             ("Conditional Token Framework", CONDITIONAL_TOKENS)
         ]
 
@@ -79,8 +85,6 @@ def check_and_approve():
                     
                     # Transaction hazırla
                     nonce = w3.eth.get_transaction_count(my_address)
-                    
-                    # Gaz fiyatını biraz artır (hızlı onay için)
                     gas_price = int(w3.eth.gas_price * 1.1)
 
                     tx = usdc.functions.approve(spender, MAX_UINT256).build_transaction({
@@ -97,7 +101,7 @@ def check_and_approve():
                     raw_tx = getattr(signed_tx, 'rawTransaction', None)
                     if raw_tx is None:
                         raw_tx = getattr(signed_tx, 'raw_transaction', None)
-                        
+                    
                     if raw_tx is None:
                         logger.error(f"❌ {name}: SignedTransaction attribute hatası.")
                         continue
@@ -107,7 +111,6 @@ def check_and_approve():
                     logger.info(f"✅ {name} Approve TX gönderildi: {w3.to_hex(tx_hash)}")
                     logger.info("⏳ Onay bekleniyor... (5sn)")
                     
-                    # Nonce çakışmasını önlemek ve zincire yazılmasını beklemek için
                     time.sleep(5) 
                 else:
                     logger.info(f"✅ {name} allowance yeterli.")
