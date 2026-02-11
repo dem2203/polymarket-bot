@@ -1,4 +1,4 @@
-# Polymarket AI Trading Bot V2 — Dependencies
+# Polymarket AI Trading Bot V3 — Dependencies
 
 # Core - Polymarket
 py-clob-client>=0.0.1
@@ -7,6 +7,7 @@ eth-account>=0.10.0
 
 # AI Brain
 anthropic>=0.40.0
+openai>=1.0.0
 
 # HTTP & WebSocket
 aiohttp>=3.9.0

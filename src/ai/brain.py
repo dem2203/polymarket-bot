@@ -62,10 +62,12 @@ class AIBrain:
         output_cost = (self.total_output_tokens / 1_000_000) * self.output_cost_per_m
         return input_cost + output_cost
 
-    async def estimate_fair_value(self, market: dict) -> Optional[dict]:
+    async def estimate_fair_value(self, market: dict,
+                                    performance_context: str = "") -> Optional[dict]:
         """
         Tek bir market için Claude'dan fair value hesapla.
-        
+        performance_context: PerformanceTracker'dan gelen öğrenme bilgisi.
+
         Returns:
             {"probability": 0.XX, "confidence": 0.XX, "reasoning": "..."} veya None
         """
@@ -80,7 +82,7 @@ class AIBrain:
 
             prompt = FAIR_VALUE_PROMPT.format(
                 question=question,
-                description=description[:500],  # Truncate uzun açıklamalar
+                description=description[:500],
                 category=category,
                 yes_price=yes_price,
                 no_price=no_price,
@@ -89,10 +91,15 @@ class AIBrain:
                 volume=volume,
             )
 
+            # Performance context'i system prompt'a enjekte et
+            system = FAIR_VALUE_SYSTEM.format(
+                performance_context=performance_context or ""
+            )
+
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=FAIR_VALUE_SYSTEM,
+                system=system,
                 messages=[{"role": "user", "content": prompt}],
             )
 

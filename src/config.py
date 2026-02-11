@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     ai_model: str = "claude-3-5-haiku-20241022"
     ai_max_tokens: int = 512
 
+    # ---- DeepSeek (Second AI) ----
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
+    enable_deepseek_validation: bool = True
+
+    # ---- Self-Learning ----
+    enable_self_learning: bool = True
+    self_review_interval_hours: int = 12
+
     # ---- Polymarket ----
     polymarket_private_key: str = ""
     polymarket_api_key: str = ""
