@@ -9,6 +9,9 @@ eth-account>=0.10.0
 anthropic>=0.40.0
 openai>=1.0.0
 
+# GitHub Integration
+PyGithub>=2.0.0
+
 # HTTP & WebSocket
 aiohttp>=3.9.0
 requests>=2.31.0

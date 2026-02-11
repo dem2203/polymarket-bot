@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     enable_self_learning: bool = True
     self_review_interval_hours: int = 12
 
+    # ---- Github Memory (Backup) ----
+    github_token: str = ""
+    github_repo: str = ""
+
     # ---- Polymarket ----
     polymarket_private_key: str = ""
     polymarket_api_key: str = ""

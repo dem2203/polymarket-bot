@@ -98,6 +98,7 @@ class PolymarketBot:
         self.perf_tracker = PerformanceTracker()
         self.adaptive_kelly = AdaptiveKelly()
         self.journal = TradeJournal(self.perf_tracker)
+        self.github_memory = GitHubMemory()
 
         # Durum
         self.running = True
@@ -109,15 +110,23 @@ class PolymarketBot:
         logger.info("=" * 60)
         logger.info("🤖 POLYMARKET AI TRADING BOT V3 — SELF-LEARNING")
         logger.info("=" * 60)
+        
+        # GitHub Memory Load
+        if self.github_memory.enabled:
+            logger.info("🌍 GitHub Hafıza yükleniyor...")
+            self.github_memory.load_memory()
+            self.perf_tracker.reload()
+            logger.info(f"📚 {len(self.perf_tracker.trades)} geçmiş trade yüklendi.")
+
         logger.info(f"Mod: {'🔵 DRY RUN' if settings.dry_run else '🟢 LIVE'}")
         logger.info(f"AI: {settings.ai_model}")
         logger.info(f"DeepSeek: {'✅ aktif' if self.deepseek.enabled else '❌ devre dışı'}")
         logger.info(f"Learning: {'✅ aktif' if settings.enable_self_learning else '❌ devre dışı'}")
+        logger.info(f"GitHub Memory: {'✅ aktif' if self.github_memory.enabled else '❌ devre dışı'}")
         logger.info(f"Bakiye: ${self.balance:.2f}")
         logger.info(f"Mispricing eşik: >{settings.mispricing_threshold:.0%}")
         logger.info(f"Kelly cap: %{settings.max_kelly_fraction*100:.0f}")
         logger.info(f"Hayatta kalma: ${settings.survival_balance:.2f}")
-        logger.info(f"Trade geçmişi: {len(self.perf_tracker.trades)} trade yüklendi")
         logger.info("=" * 60)
 
         # API kontrolleri
@@ -133,6 +142,7 @@ class PolymarketBot:
             logger.info(f"✅ AI hazır: {health['model']}")
         else:
             logger.error(f"❌ AI HATA: {health['error']}")
+            # Kritik hata değilse devam et, ama bildir
 
         # Bakiye sorgula
         self.balance = self.executor.get_balance()
@@ -152,7 +162,7 @@ class PolymarketBot:
             f"Bakiye: ${self.balance:.2f}\n"
             f"AI: {settings.ai_model}\n"
             f"DeepSeek: {'✅' if self.deepseek.enabled else '❌'}\n"
-            f"Learning: {'✅' if settings.enable_self_learning else '❌'}\n"
+            f"GitHub Memory: {'✅' if self.github_memory.enabled else '❌'}\n"
             f"Trade geçmişi: {len(self.perf_tracker.trades)} trade\n"
             f"Kelly: {self.adaptive_kelly.global_multiplier:.2f}\n"
             f"Tarama: Her {settings.scan_interval // 60} dk\n"
@@ -165,6 +175,11 @@ class PolymarketBot:
         while self.running:
             try:
                 await self._trading_cycle()
+
+                # GitHub Memory Save (her saat)
+                if self.cycle_count % 6 == 0 and self.github_memory.enabled:
+                    logger.info("🌍 GitHub hafıza yedekleniyor...")
+                    self.github_memory.save_memory()
 
                 # Self-review zamanı mı?
                 if settings.enable_self_learning:
@@ -181,6 +196,10 @@ class PolymarketBot:
                             self.strategy.set_performance_context(
                                 self.perf_tracker.get_performance_context()
                             )
+                            
+                            # Review sonrası da yedekle
+                            if self.github_memory.enabled:
+                                self.github_memory.save_memory()
 
                 # Bekleme
                 logger.info(f"⏳ {settings.scan_interval // 60} dakika bekleniyor...\n")
@@ -194,6 +213,11 @@ class PolymarketBot:
                 await self.telegram.notify_error(str(e))
                 await asyncio.sleep(60)
 
+        # Shutdown'da yedekle
+        if self.github_memory.enabled:
+            logger.info("🛑 Bot kapanıyor, son hafıza yedeği alınıyor...")
+            self.github_memory.save_memory()
+        
         logger.info("Bot kapatıldı.")
 
     async def _trading_cycle(self):

@@ -85,6 +85,10 @@ class PerformanceTracker:
         except Exception as e:
             logger.error(f"Trade geçmişi kaydedilemedi: {e}")
 
+    def reload(self):
+        """Diskten trade geçmişini yeniden yükle."""
+        self._load()
+
     def record_trade(self, signal, cycle_number: int = 0,
                      deepseek_fv: float = 0.0) -> str:
         """Yeni trade kaydet. Trade ID döner."""
