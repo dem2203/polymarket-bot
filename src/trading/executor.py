@@ -58,6 +58,7 @@ class TradeExecutor:
                 host=settings.clob_api_url,
                 key=pk,
                 chain_id=137,  # Polygon
+                funder=settings.polymarket_funder_address,  # Proxy Address for funding
             )
 
             # API credentials
@@ -71,9 +72,6 @@ class TradeExecutor:
                 # Otomatik türet
                 self.client.set_api_creds(self.client.derive_api_key())
 
-            # Funder address (proxy wallet için)
-            if settings.polymarket_funder_address:
-                self.client.set_funder(settings.polymarket_funder_address)
 
             logger.info("✅ CLOB client başlatıldı (LIVE mode)")
         except Exception as e:

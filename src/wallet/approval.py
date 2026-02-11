@@ -58,7 +58,13 @@ def check_and_approve():
         my_address = account.address
         
         # Proxy Adresi (Kullanıcıdan alınan)
-        proxy_address = settings.polymarket_funder_address
+        try:
+            proxy_address = settings.polymarket_funder_address
+            if proxy_address:
+                proxy_address = Web3.to_checksum_address(proxy_address)
+        except Exception as e:
+            logger.error(f"❌ Proxy adresi geçersiz: {e}")
+            proxy_address = None
         
         logger.info(f"💳 Cüzdan kontrol ediliyor: {my_address}")
         if proxy_address:
