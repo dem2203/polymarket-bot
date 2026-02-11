@@ -11,7 +11,7 @@ logger = logging.getLogger("bot.wallet")
 RPC_URL = "https://polygon-rpc.com"
 USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC.e (Bridged)
 CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"  # Polymarket Exchange
-MAX_UINT256 = 2**256 - 1
+NEG_RISK_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"  # Neg Risk Adapter
 
 # Minimal ERC20 ABI for approve/allowance
 ERC20_ABI = [
@@ -38,7 +38,7 @@ ERC20_ABI = [
 ]
 
 def check_and_approve():
-    """USDC için Polymarket Exchange'e harcama izni (allowance) ver."""
+    """USDC için Polymarket Exchange ve Neg Risk Adapter'e harcama izni ver."""
     if not settings.polymarket_private_key:
         logger.warning("Private key yok, approval atlanıyor.")
         return
@@ -58,47 +58,57 @@ def check_and_approve():
 
         usdc = w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
         
-        # Mevcut izni kontrol et
-        allowance = usdc.functions.allowance(my_address, CTF_EXCHANGE).call()
-        logger.info(f"💰 Mevcut Allowance: {allowance / 1e6:.2f} USDC")
+        # Approve edilecek kontratlar
+        targets = [
+            ("CTF Exchange", CTF_EXCHANGE),
+            ("Neg Risk Adapter", NEG_RISK_ADAPTER)
+        ]
 
-        if allowance < 1000 * 1e6:  # 1000 USDC'den azsa yenile
-            logger.info("🔓 Allowance artırılıyor (Unlimited)...")
-            
-            # Transaction hazırla
-            tx = usdc.functions.approve(CTF_EXCHANGE, MAX_UINT256).build_transaction({
-                'from': my_address,
-                'nonce': w3.eth.get_transaction_count(my_address),
-                'gas': 100000,
-                'gasPrice': w3.eth.gas_price,
-            })
-            
-            # İmzala ve gönder
-            signed_tx = w3.eth.account.sign_transaction(tx, pk)
-            
-            # Farklı versiyonlar için attribute kontrolü
-            raw_tx = getattr(signed_tx, 'rawTransaction', None)
-            if raw_tx is None:
-                raw_tx = getattr(signed_tx, 'raw_transaction', None)
-                
-            if raw_tx is None:
-                # Debug için
-                logger.error(f"❌ SignedTransaction attribute hatası. Dir: {dir(signed_tx)}")
-                return
+        MAX_UINT256 = 2**256 - 1
 
-            tx_hash = w3.eth.send_raw_transaction(raw_tx)
-            
-            logger.info(f"✅ Approve TX gönderildi: {w3.to_hex(tx_hash)}")
-            logger.info("⏳ Onay bekleniyor...")
-            
-            # Basit bekleme
-            time.sleep(5) 
-            
-            # Tekrar kontrol (opsiyonel)
-            new_allowance = usdc.functions.allowance(my_address, CTF_EXCHANGE).call()
-            logger.info(f"💰 Yeni Allowance: {new_allowance / 1e6:.2f} USDC")
-        else:
-            logger.info("✅ Allowance yeterli.")
+        for name, spender in targets:
+            # Mevcut izni kontrol et
+            try:
+                allowance = usdc.functions.allowance(my_address, spender).call()
+                logger.info(f"💰 {name} Allowance: {allowance / 1e6:.2f} USDC")
+
+                if allowance < 1000 * 1e6:
+                    logger.info(f"🔓 {name} allowance artırılıyor (Unlimited)...")
+                    
+                    # Transaction hazırla
+                    nonce = w3.eth.get_transaction_count(my_address) # Dikkat: Nonce takibi gerekebilir
+                    
+                    tx = usdc.functions.approve(spender, MAX_UINT256).build_transaction({
+                        'from': my_address,
+                        'nonce': nonce,
+                        'gas': 100000,
+                        'gasPrice': w3.eth.gas_price,
+                    })
+                    
+                    # İmzala ve gönder
+                    signed_tx = w3.eth.account.sign_transaction(tx, pk)
+                    
+                    # Farklı versiyonlar için attribute kontrolü
+                    raw_tx = getattr(signed_tx, 'rawTransaction', None)
+                    if raw_tx is None:
+                        raw_tx = getattr(signed_tx, 'raw_transaction', None)
+                        
+                    if raw_tx is None:
+                        logger.error(f"❌ {name}: SignedTransaction attribute hatası.")
+                        continue
+
+                    tx_hash = w3.eth.send_raw_transaction(raw_tx)
+                    
+                    logger.info(f"✅ {name} Approve TX gönderildi: {w3.to_hex(tx_hash)}")
+                    logger.info("⏳ Onay bekleniyor... (5sn)")
+                    
+                    # Nonce çakışmasını önlemek ve zincire yazılmasını beklemek için
+                    time.sleep(5) 
+                else:
+                    logger.info(f"✅ {name} allowance yeterli.")
+                    
+            except Exception as e:
+                logger.error(f"❌ {name} işlem hatası: {e}")
 
     except Exception as e:
-        logger.error(f"❌ Allowance hatası: {e}")
+        logger.error(f"❌ Genel Wallet Hatası: {e}")
