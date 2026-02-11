@@ -9,7 +9,14 @@ import json
 import logging
 import base64
 from typing import Optional
-from github import Github, GithubException
+try:
+    from github import Github, GithubException
+    GITHUB_AVAILABLE = True
+except ImportError:
+    GITHUB_AVAILABLE = False
+    class Github: pass
+    class GithubException(Exception): pass
+    print("⚠️ PyGithub bulunamadı, GitHub hafıza devre dışı.")
 
 from src.config import settings
 from src.learning.performance_tracker import HISTORY_FILE
@@ -22,7 +29,10 @@ class GitHubMemory:
     """GitHub tabanlı hafıza yöneticisi."""
 
     def __init__(self):
-        self.enabled = bool(settings.github_token and settings.github_repo)
+        self.enabled = False
+        if GITHUB_AVAILABLE:
+            self.enabled = bool(settings.github_token and settings.github_repo)
+        
         self.github = None
         self.repo = None
         

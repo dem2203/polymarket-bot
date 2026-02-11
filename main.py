@@ -17,6 +17,9 @@ import signal
 import sys
 import time
 import os
+
+print("🚀 POLYMARKET AI BOT V3 BAŞLATILIYOR... (Debug Mode)", flush=True)
+
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
