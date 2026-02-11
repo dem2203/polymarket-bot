@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # ---- AI Brain ----
     anthropic_api_key: str = ""
-    ai_model: str = "claude-haiku-4-5-20241022"
+    ai_model: str = "claude-3-5-haiku-20241022"
     ai_max_tokens: int = 512
 
     # ---- Polymarket ----
