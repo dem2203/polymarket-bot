@@ -41,6 +41,7 @@ from src.notifications.telegram import TelegramNotifier
 from src.learning.performance_tracker import PerformanceTracker
 from src.learning.adaptive_kelly import AdaptiveKelly
 from src.learning.trade_journal import TradeJournal
+from src.learning.github_memory import GitHubMemory
 
 # Log + data dizinleri
 os.makedirs("logs", exist_ok=True)
