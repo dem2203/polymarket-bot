@@ -8,9 +8,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from web3 import Web3
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import OrderArgs, ApiCreds, BalanceAllowanceParams, AssetType
 from py_clob_client.order_builder.constants import BUY, SELL
+
+# Polygon Constants (Local)
+RPC_URL = "https://polygon-rpc.com"
+USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+ERC20_ABI = [{"constant":True,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}]
 
 from src.config import settings
 from src.strategy.mispricing import TradeSignal
@@ -184,19 +190,32 @@ class TradeExecutor:
         if self.dry_run or not self.client:
             return settings.starting_balance
 
+        # Try API
+        bal_api = 0.0
         try:
-            # CLOB API'den bakiye al
             params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL, signature_type=2)
             balance_resp = self.client.get_balance_allowance(params)
-            
             if balance_resp:
-                # API returns string balance in collateral decimals (6 for USDC)
-                # But wait, does it return raw integer or formatted?
-                # Usually raw integer string.
-                bal_raw = float(balance_resp.get("balance", "0"))
-                return bal_raw / 1e6 # Convert from 6 decimals
+                bal_api = float(balance_resp.get("balance", "0")) / 1e6
         except Exception as e:
-            logger.warning(f"Bakiye sorgu hatası: {e}")
+            logger.warning(f"API Bakiye hatası: {e}")
+
+        if bal_api > 0.5:
+            return bal_api
+            
+        # Try Web3 Fallback (Proxy Balance)
+        try:
+            proxy = settings.polymarket_funder_address
+            if proxy:
+                w3 = Web3(Web3.HTTPProvider(RPC_URL))
+                checksum_addr = Web3.to_checksum_address(proxy)
+                contract = w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
+                balance_wei = contract.functions.balanceOf(checksum_addr).call()
+                bal_web3 = balance_wei / 1e6
+                logger.info(f"💰 Web3 Bakiye (Fallback): {bal_web3:.2f} USDC")
+                return bal_web3
+        except Exception as e:
+            logger.warning(f"Web3 Bakiye hatası: {e}")
 
         return settings.starting_balance
 
