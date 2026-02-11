@@ -49,9 +49,14 @@ class TradeExecutor:
     def _init_client(self):
         """CLOB client başlat ve kimlik doğrula."""
         try:
+            # Key'i temizle (boşluk, tırnak vb.)
+            pk = settings.polymarket_private_key
+            if pk:
+                pk = pk.strip().replace('"', '').replace("'", "")
+
             self.client = ClobClient(
                 host=settings.clob_api_url,
-                key=settings.polymarket_private_key,
+                key=pk,
                 chain_id=137,  # Polygon
             )
 

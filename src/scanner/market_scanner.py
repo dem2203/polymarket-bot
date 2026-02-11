@@ -102,10 +102,23 @@ class MarketScanner:
                 if liquidity < self.min_liquidity:
                     continue
 
-                # Token bilgisi olmalı
+                # Token parse logic
                 tokens = m.get("clobTokenIds", m.get("tokens", []))
+                
+                if isinstance(tokens, str):
+                    import json
+                    try:
+                        # JSON listesi mi? '["123", "456"]'
+                        tokens = json.loads(tokens)
+                    except json.JSONDecodeError:
+                        # Düz string ise? "123,456"
+                        tokens = tokens.split(",")
+                
                 if not tokens:
                     continue
+                
+                # Clean tokens (remove spaces/quotes if any)
+                tokens = [str(t).strip().replace('"', '').replace("'", "") for t in tokens]
 
                 # Fiyat bilgisi
                 yes_price = self._extract_price(m, "yes")
