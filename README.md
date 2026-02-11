@@ -1,98 +1,94 @@
-# 🤖 Polymarket Professional Trading Bot
+# 🤖 Polymarket AI Trading Bot V2
 
-Polymarket prediction market'i üzerinde **tam otonom** çalışan profesyonel trading bot.
+**Claude AI ile %8+ mispricing tespiti yapan, Kelly Criterion ile pozisyon alan otonom trading bot.**
 
-## ✨ Özellikler
+50$ → Hayatta kal ya da öl.
+
+## Nasıl Çalışır?
+
+Her **10 dakikada** bir:
+
+1. 📡 **500-1000 market** taranır (Gamma API)
+2. 🧠 **Claude AI** ile her market için **fair value** hesaplanır
+3. 🎯 **>%8 mispricing** tespit edilir
+4. 📊 **Kelly Criterion** ile pozisyon büyüklüğü hesaplanır (max %6 sermaye)
+5. 🛡️ Risk kontrolünden geçirilir
+6. ⚡ **Limit emir** gönderilir
+7. 🔍 Pozisyonlar izlenir (Stop-Loss / Take-Profit)
+8. 💰 **Ekonomi raporu** güncellenir (API maliyeti vs gelir)
+
+## Özellikler
 
 | Özellik | Açıklama |
 |---------|----------|
-| 🔄 Otomatik Trading | Market tarama, strateji analizi, emir yürütme |
-| 📊 3 Strateji | Momentum, Value, Arbitrage |
-| 🛡 Risk Yönetimi | Stop-loss, take-profit, günlük limit, exposure kontrolü |
-| 💰 Wallet Yönetimi | Otomatik bakiye/allowance kontrolü |
-| 📱 Telegram Bildirimleri | Trade açılış/kapanış, PnL raporları, hata uyarıları |
-| 🧪 Dry Run Modu | Gerçek para olmadan test |
-| 🚀 Railway Deploy | Dockerfile + railway.toml hazır |
+| 🧠 AI Brain | Claude Haiku ile fair value hesaplama |
+| 📊 Kelly Criterion | Matematiksel pozisyon boyutlandırma |
+| 🎯 Mispricing | >%8 fiyatlama hatası tespiti |
+| 🔄 Arbitraj | YES + NO < 0.98 risksiz fırsat |
+| 🛡️ Risk Yönetimi | SL/TP, günlük limit, hayatta kalma modu |
+| 💀 Hayatta Kalma | Bakiye < $5 → tüm işlemler durur |
+| 💰 Ekonomi Takibi | API maliyeti vs trading geliri |
+| 📱 Telegram | Anlık trade + rapor bildirimleri |
+| 🔵 DRY RUN | Gerçek para olmadan test |
 
-## 🏗 Mimari
+## Hızlı Kurulum
 
-```
-Market Data (Gamma API) → Strateji Motoru → Risk Manager → Emir Yürütme → Pozisyon Takibi
-     ↑                                                                              ↓
- WebSocket ←──────────────────── Monitoring Loop ─────────────────── Telegram Bildirim
-```
-
-## 🚀 Kurulum
-
-### 1. Bağımlılıkları Yükle
 ```bash
+# 1. Kopyala
+git clone https://github.com/dem2203/polymarket-bot.git
+cd polymarket-bot
+
+# 2. Bağımlılıklar
 pip install -r requirements.txt
-```
 
-### 2. Konfigürasyon
-```bash
-copy .env.example .env
-```
+# 3. .env ayarla
+cp .env.example .env
+# .env dosyasını düzenle: API key'lerini gir
 
-`.env` dosyasını düzenleyin:
-- `POLYMARKET_PRIVATE_KEY` → Polymarket hesabınızdan: Cash > ... > Export Private Key
-- `TELEGRAM_BOT_TOKEN` → @BotFather'dan alın
-- `TELEGRAM_CHAT_ID` → @userinfobot'a mesaj gönderin
-
-### 3. Dry Run Test
-```bash
-set DRY_RUN=true
+# 4. Test et (DRY RUN)
 python main.py
 ```
 
-### 4. Canlıya Geç
-```bash
-set DRY_RUN=false
-python main.py
+## .env Ayarları
+
+```env
+# Zorunlu
+ANTHROPIC_API_KEY=sk-ant-...     # Claude API key
+POLYMARKET_PRIVATE_KEY=0x...     # Polymarket private key
+TELEGRAM_BOT_TOKEN=123:ABC       # Telegram bot token
+TELEGRAM_CHAT_ID=123456          # Telegram chat ID
+
+# Trading
+DRY_RUN=true                     # İlk test için true!
+STARTING_BALANCE=50              # Başlangıç bakiyesi
+MAX_KELLY_FRACTION=0.06          # Max %6 sermaye/trade
+MISPRICING_THRESHOLD=0.08        # >%8 mispricing
+STOP_LOSS_PCT=0.20               # %20 kayıp = çık
+TAKE_PROFIT_PCT=0.25             # %25 kâr = sat
+SURVIVAL_BALANCE=5.0             # $5 altında dur
 ```
 
-## ☁️ Railway Deployment
+## Railway Deploy
 
-### 1. GitHub'a Push
-```bash
-git init
-git add .
-git commit -m "Polymarket Bot v1.0"
-git remote add origin https://github.com/YOUR_USER/polymarket-bot.git
-git push -u origin main
+1. GitHub'a push et
+2. [Railway](https://railway.app) → New Project → Deploy from GitHub
+3. `dem2203/polymarket-bot` seç
+4. Variables'a .env değerlerini ekle
+5. Deploy otomatik başlar
+
+## Mimari
+
 ```
-
-### 2. Railway'de
-1. [railway.app](https://railway.app) → New Project → Deploy from GitHub
-2. Repo'yu seçin
-3. **Variables** sekmesinden `.env` değişkenlerini ekleyin:
-   - `POLYMARKET_PRIVATE_KEY`
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHAT_ID`
-   - `DRY_RUN=false` (canlı için)
-   - Diğer parametreler...
-
-## ⚙️ Trading Parametreleri
-
-| Parametre | Varsayılan | Açıklama |
-|-----------|------------|----------|
-| `DRY_RUN` | `true` | Gerçek emir gönderilmez |
-| `MAX_ORDER_SIZE` | `10` | Tek emir max (USDC) |
-| `MAX_TOTAL_EXPOSURE` | `100` | Toplam max pozisyon (USDC) |
-| `STOP_LOSS_PCT` | `0.15` | Stop-loss %15 |
-| `TAKE_PROFIT_PCT` | `0.30` | Take-profit %30 |
-| `DAILY_LOSS_LIMIT` | `50` | Günlük max kayıp (USDC) |
-| `MIN_CONFIDENCE` | `0.65` | Minimum strateji güven skoru |
-| `SCAN_INTERVAL` | `60` | Tarama aralığı (saniye) |
+src/
+├── ai/            # Claude AI Brain (fair value)
+├── scanner/       # 500-1000 market tarayıcı
+├── strategy/      # Kelly + Mispricing + Arbitraj
+├── trading/       # Executor + Positions + Risk
+├── economics/     # API cost vs revenue tracker
+└── notifications/ # Telegram bildirimleri
+```
 
 ## ⚠️ Risk Uyarısı
 
-Bu bot gerçek para ile işlem yapar. Lütfen:
-1. İlk önce `DRY_RUN=true` ile test edin
-2. Küçük miktarlarla başlayın
-3. Risk parametrelerini kendinize göre ayarlayın
-4. Bot'u düzenli izleyin
-
-## 📜 Lisans
-
-MIT
+Bu bot gerçek para ile işlem yapar. **DRY_RUN=true** ile başlayıp test edin.
+Kâr garantisi yoktur. Kaybedebilirsiniz.

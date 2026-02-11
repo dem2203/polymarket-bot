@@ -1,30 +1,32 @@
-# Polymarket SDK
-py-clob-client>=0.18.0
+# Polymarket AI Trading Bot V2 — Dependencies
 
-# Web3 / Blockchain
+# Core - Polymarket
+py-clob-client>=0.0.1
 web3>=6.0.0
-eth-account>=0.13.0
+eth-account>=0.10.0
+
+# AI Brain
+anthropic>=0.40.0
 
 # HTTP & WebSocket
 aiohttp>=3.9.0
-websockets>=12.0
 requests>=2.31.0
 
 # Telegram
 python-telegram-bot>=20.0
 
-# Utilities
+# Config & Env
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
-# Scheduling
-apscheduler>=3.10.0
-
-# Testing
-pytest>=7.0.0
-pytest-asyncio>=0.23.0
-pytest-mock>=3.12.0
+# Data
+pandas>=2.0.0
 
 # Logging
 rich>=13.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0

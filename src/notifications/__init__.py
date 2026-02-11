@@ -1,1 +1,1 @@
-"""Bildirim modülü - Telegram."""
+# Notifications Module

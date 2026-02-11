@@ -1,1 +1,1 @@
-"""Polymarket Professional Trading Bot"""
+# Polymarket AI Trading Bot V2
