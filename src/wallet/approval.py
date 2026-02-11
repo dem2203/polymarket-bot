@@ -11,16 +11,10 @@ logger = logging.getLogger("bot.wallet")
 RPC_URL = "https://polygon-rpc.com"
 USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC.e (Bridged)
 CTF_EXCHANGE = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"  # Polymarket Exchange
+NEG_RISK_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a"  # Correct Mainnet Address
+CONDITIONAL_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" # CTF
 
-# Doğru Neg Risk Exchange (Mainnet: 137)
-# py_clob_client/config.py -> 0xC5d563A36AE78145C45a50134d48A1215220f80a
-NEG_RISK_EXCHANGE = "0xC5d563A36AE78145C45a50134d48A1215220f80a"  
-
-# Conditional Tokens Framework (CTF)
-# py_clob_client/config.py -> 0x4D97DCd97eC945f40cF65F87097ACe5EA0476045
-CONDITIONAL_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
-
-# Minimal ERC20 ABI for approve/allowance
+# Minimal ERC20 ABI for approve/allowance/balance
 ERC20_ABI = [
     {
         "constant": True,
@@ -40,6 +34,13 @@ ERC20_ABI = [
         ],
         "name": "approve",
         "outputs": [{"name": "", "type": "bool"}],
+        "type": "function"
+    },
+    {
+        "constant": True,
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"name": "balance", "type": "uint256"}],
         "type": "function"
     }
 ]
@@ -65,6 +66,13 @@ def check_and_approve():
 
         usdc = w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
         
+        # 1. Check Balance (Diagnostic)
+        balance = usdc.functions.balanceOf(my_address).call()
+        logger.info(f"💰 EOA USDC Bakiye: {balance / 1e6:.2f} USDC")
+
+        if balance < 1000000: # Less than 1 USDC
+            logger.warning("⚠️ EOA Bakiyesi çok düşük (< 1 USDC). Eğer Proxy kullanıyorsan sorun yok.")
+
         # Approve edilecek TÜM kontratlar (Doğru adresler)
         targets = [
             ("CTF Exchange", CTF_EXCHANGE),
@@ -78,10 +86,10 @@ def check_and_approve():
             # Mevcut izni kontrol et
             try:
                 allowance = usdc.functions.allowance(my_address, spender).call()
-                logger.info(f"💰 {name} Allowance: {allowance / 1e6:.2f} USDC")
+                logger.info(f"🔓 {name} Allowance: {allowance / 1e6:.2f} USDC")
 
                 if allowance < 1000 * 1e6:
-                    logger.info(f"🔓 {name} allowance artırılıyor (Unlimited)...")
+                    logger.info(f"⚙️ {name} allowance artırılıyor (Unlimited)...")
                     
                     # Transaction hazırla
                     nonce = w3.eth.get_transaction_count(my_address)
