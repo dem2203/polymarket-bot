@@ -42,6 +42,7 @@ from src.learning.performance_tracker import PerformanceTracker
 from src.learning.adaptive_kelly import AdaptiveKelly
 from src.learning.trade_journal import TradeJournal
 from src.learning.github_memory import GitHubMemory
+from src.wallet.approval import check_and_approve
 
 # Log + data dizinleri
 os.makedirs("logs", exist_ok=True)
@@ -409,6 +410,10 @@ class PolymarketBot:
 async def main():
     """Entry point."""
     start_health_server()
+    
+    # Wallet Allowance kontrolü
+    check_and_approve()
+
     bot = PolymarketBot()
     signal.signal(signal.SIGINT, bot.shutdown)
     signal.signal(signal.SIGTERM, bot.shutdown)
