@@ -250,6 +250,12 @@ class PolymarketBot:
                 self.perf_tracker.get_performance_context()
             )
 
+        # 0. Açık emirleri temizle (Sermaye yönetimi)
+        try:
+            await self.executor.cancel_all_open_orders()
+        except Exception as e:
+            logger.warning(f"Emir iptal hatası: {e}")
+
         # 1. Market tarama
         logger.info("📡 Marketler taranıyor...")
         markets = await self.scanner.scan_all_markets()

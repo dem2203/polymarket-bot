@@ -185,6 +185,39 @@ class TradeExecutor:
         else:
             return tokens[1] if len(tokens) > 1 else None
 
+    async def cancel_specific_order(self, order_id: str) -> bool:
+        """Belirli bir emri iptal et."""
+        if self.dry_run:
+            logger.info(f"🔵 [DRY RUN] İptal simüle: {order_id}")
+            return True
+
+        if not self.client:
+            return False
+
+        try:
+            self.client.cancel(order_id)
+            logger.info(f"🗑️ Emir iptal edildi: {order_id}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ İptal hatası ({order_id}): {e}")
+            return False
+
+    async def cancel_all_open_orders(self):
+        """Tüm açık emirleri iptal et."""
+        if self.dry_run:
+            # logger.info("🔵 [DRY RUN] Tüm açık emirler iptal silindi (simüle)")
+            return
+
+        orders = self.get_open_orders()
+        if not orders:
+            return
+
+        logger.info(f"🧹 {len(orders)} açık emir temizleniyor (sermaye serbest bırakılıyor)...")
+        for order in orders:
+            order_id = order.get("orderID")
+            if order_id:
+                await self.cancel_specific_order(order_id)
+
     async def sell_position(self, token_id: str, shares: float, price: float) -> Optional[ExecutedOrder]:
         """
         Pozisyon sat — SELL emri gönder.
