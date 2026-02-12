@@ -398,11 +398,20 @@ class PolymarketBot:
         trades_executed = 0
 
         for signal in signals:
+            if trades_executed >= 5:
+                logger.info("⚠️ Döngü başına max 5 trade limitine ulaşıldı.")
+                break
+
+            # V3.3.13: Mevcut pozisyon değerini sinyale ekle (Risk Manager için)
+            existing_pos = self.positions.open_positions.get(signal.market_id)
+            if existing_pos:
+                # Token tarafı aynı mı? (YES alırken NO varsa hedge olur, ama şimdilik basit tutalım)
+                if existing_pos.token_side == signal.token_side:
+                    signal.current_position_value = existing_pos.shares * signal.market_price
+            
+            # Risk check
             allowed, reason = self.risk.is_trade_allowed(
-                signal=signal,
-                balance=total_value,
-                total_exposure=self.positions.total_exposure,
-                open_positions=len(self.positions.open_positions),
+                signal, self.balance, self.positions.total_exposure, len(self.positions.open_positions)
             )
 
             if not allowed:

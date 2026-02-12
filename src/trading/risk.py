@@ -94,7 +94,23 @@ class RiskManager:
                 signal.position_size = required_size
 
         # 6. Tek trade'de bakiyenin max %10'unu aşma
-        if signal.position_size > max_single + 0.01:  # Add $0.01 tolerance for float precision
+        # V3.3.13: Cumulative check (Mevcut pozisyon + Yeni trade)
+        current_exposure = getattr(signal, "current_position_value", 0.0)
+        total_projected_exposure = current_exposure + signal.position_size
+        
+        if total_projected_exposure > max_single + 0.05:
+            # Belki azaltabiliriz?
+            room_left = max_single - current_exposure
+            if room_left < 2.0: # $2'dan az yer kaldıysa girme
+                return False, (
+                    f"⚠️ Exposure dolu: Mevcut ${current_exposure:.2f} + Yeni ${signal.position_size:.2f} > Limit ${max_single:.2f}"
+                )
+            else:
+                # Sığdığı kadar al
+                logger.info(f"⚖️ Exposure limiti: ${signal.position_size:.2f} -> ${room_left:.2f} olarak kırpıldı.")
+                signal.position_size = room_left
+
+        if signal.position_size > max_single + 0.01:  # Double check after trim
             return False, (
                 f"⚠️ Tek trade limiti: ${signal.position_size:.2f} > ${max_single:.2f} "
                 f"(%{settings.max_kelly_fraction*100:.0f} bakiye)"
