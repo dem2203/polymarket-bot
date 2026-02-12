@@ -3,15 +3,18 @@ Position Tracker — Açık pozisyon takibi, PnL hesabı.
 Hayatta kalma kontrolü.
 """
 
+import json
+import os
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Optional
 
 from src.config import settings
 from src.trading.executor import ExecutedOrder
 
 logger = logging.getLogger("bot.positions")
+DATA_FILE = "data/positions.json"
 
 
 @dataclass
@@ -60,6 +63,47 @@ class PositionTracker:
         self.total_realized_pnl: float = 0.0
         self.daily_pnl: float = 0.0
         self._last_daily_reset: float = time.time()
+        
+        # Başlangıçta yükle
+        self.load_positions()
+
+    def save_positions(self):
+        """Pozisyonları diske kaydet."""
+        try:
+            data = {
+                "open_positions": {
+                    mid: asdict(pos) for mid, pos in self.open_positions.items()
+                },
+                "total_realized_pnl": self.total_realized_pnl,
+                "daily_pnl": self.daily_pnl,
+                "last_daily_reset": self._last_daily_reset
+            }
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Pozisyon kaydetme hatası: {e}")
+
+    def load_positions(self):
+        """Pozisyonları diskten yükle."""
+        if not os.path.exists(DATA_FILE):
+            return
+
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            # Open positions
+            for mid, pos_data in data.get("open_positions", {}).items():
+                self.open_positions[mid] = Position(**pos_data)
+            
+            self.total_realized_pnl = data.get("total_realized_pnl", 0.0)
+            self.daily_pnl = data.get("daily_pnl", 0.0)
+            self._last_daily_reset = data.get("last_daily_reset", time.time())
+            
+            if self.open_positions:
+                logger.info(f"📂 {len(self.open_positions)} açık pozisyon geri yüklendi.")
+        except Exception as e:
+            logger.error(f"Pozisyon yükleme hatası: {e}")
 
     def open_position(self, order: ExecutedOrder, token_id: str = "") -> Position:
         """Yeni pozisyon aç."""
@@ -76,11 +120,35 @@ class PositionTracker:
         )
 
         self.open_positions[order.market_id] = position
+        self.save_positions()
+        
         logger.info(
             f"📂 Pozisyon açıldı: {order.token_side} {order.shares:.1f} shares "
             f"@ ${order.price:.3f} (${order.size:.2f}) | {order.question[:40]}..."
         )
         return position
+
+    def add_remote_position(self, market_id: str, question: str, token_side: str, 
+                          shares: float, entry_price: float, token_id: str):
+        """API'den gelen pozisyonu ekle (Sync için)."""
+        if market_id in self.open_positions:
+            return  # Zaten takipte
+
+        cost_basis = shares * entry_price
+        pos = Position(
+            market_id=market_id,
+            question=question,
+            token_side=token_side,
+            entry_price=entry_price,
+            shares=shares,
+            cost_basis=cost_basis,
+            current_price=entry_price, # Geçici
+            token_id=token_id,
+            opened_at=time.time() # Bilinmiyor
+        )
+        self.open_positions[market_id] = pos
+        self.save_positions()
+        logger.info(f"🔄 Senkronize edildi: {token_side} {shares:.1f} @ ${entry_price:.2f} | {question[:40]}")
 
     def close_position(self, market_id: str, exit_price: float) -> Optional[ClosedPosition]:
         """Pozisyon kapat, PnL hesapla."""
@@ -107,6 +175,7 @@ class PositionTracker:
         self.closed_positions.append(closed)
         self.total_realized_pnl += realized_pnl
         self.daily_pnl += realized_pnl
+        self.save_positions()
 
         emoji = "🟢" if realized_pnl >= 0 else "🔴"
         logger.info(

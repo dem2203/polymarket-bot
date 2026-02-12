@@ -140,6 +140,57 @@ class PolymarketBot:
             await self.telegram.send("❌ ANTHROPIC_API_KEY yok! Bot duruyor.")
             return
 
+        # 🔄 PORTFOLIO SYNC (API'den Pozisyonları Kurtar)
+        if settings.has_polymarket_key:
+            try:
+                logger.info("🌊 Portfolyo senkronizasyonu başlıyor...")
+                api_positions = await self.executor.get_open_positions()
+                
+                if api_positions:
+                    logger.info(f"⏳ {len(api_positions)} pozisyon için market bilgileri aranıyor...")
+                    # Tüm marketleri çek (başlıkları bulmak için)
+                    all_markets = await self.scanner.scan_all_markets()
+                    
+                    # Token ID -> Market haritası çıkar
+                    token_map = {}
+                    for m in all_markets:
+                        for t in m.get("tokens", []):
+                            token_map[t["token_id"]] = m
+                    
+                    # Eşleştir ve ekle
+                    synced_count = 0
+                    for p in api_positions:
+                        tid = p.get("asset_id")
+                        size = float(p.get("size", 0))
+                        
+                        if size > 0 and tid in token_map:
+                            m = token_map[tid]
+                            # Tarafı bul (Token ID karşılaştır)
+                            side = "UNKNOWN"
+                            tokens = m.get("tokens", [])
+                            if tokens and len(tokens) >= 2:
+                                if tid == tokens[0]["token_id"]:
+                                    side = "YES" # Genellikle 0=YES
+                                elif tid == tokens[1]["token_id"]:
+                                    side = "NO"
+                            
+                            # Pozisyonu ekle
+                            self.positions.add_remote_position(
+                                market_id=m["id"],
+                                question=m["question"],
+                                token_side=side,
+                                shares=size,
+                                entry_price=float(p.get("avg_price", 0)),
+                                token_id=tid
+                            )
+                            synced_count += 1
+                    
+                    logger.info(f"✅ {synced_count}/{len(api_positions)} pozisyon kurtarıldı ve eşleştirildi.")
+                else:
+                    logger.info("ℹ️ API'de açık pozisyon bulunamadı.")
+            except Exception as e:
+                logger.error(f"❌ Portfolyo sync hatası: {e}")
+
         # AI Health Check
         logger.info("AI Health Check...")
         health = self.brain.health_check()
@@ -319,8 +370,17 @@ class PolymarketBot:
             # Adaptive Kelly multiplier
             kelly_mult = self.adaptive_kelly.get_multiplier()
 
+            # Portfolio Value (Cash + Positions)
+            portfolio_summary = self.positions.get_portfolio_summary(self.balance)
+            portfolio_value = portfolio_summary.get("total_exposure", 0.0)
+            total_value = self.balance + portfolio_value
+            
+            logger.info(f"💰 Cash: ${self.balance:.2f} | Portfolio: ${portfolio_value:.2f} | Total: ${total_value:.2f}")
+
             signals = await self.strategy.scan_for_signals(
-                markets_to_analyze, self.balance,
+                markets_to_analyze, 
+                cash=self.balance,
+                portfolio_value=portfolio_value,
                 max_signals=5, kelly_multiplier=kelly_mult
             )
 

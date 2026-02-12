@@ -58,8 +58,9 @@ class MispricingStrategy:
         """PerformanceTracker'dan öğrenme bilgisini ayarla."""
         self._performance_context = context
 
-    async def analyze_market(self, market: dict, balance: float,
-                              kelly_multiplier: float = 0.5) -> Optional[TradeSignal]:
+    async def analyze_market(self, market: dict, cash: float,
+                               portfolio_value: float = 0.0,
+                               kelly_multiplier: float = 0.5) -> Optional[TradeSignal]:
         """
         Tek bir marketi analiz et — V3 pipeline:
         1. Claude'dan fair value al (performance context ile)
@@ -68,9 +69,12 @@ class MispricingStrategy:
         4. Kelly ile pozisyon büyüklüğü hesapla (adaptive)
         5. TradeSignal döndür
         """
-        # 1. AI Fair Value (Claude + learning context)
+        # 1. AI Fair Value (Claude + financial context)
         ai_result = await self.brain.estimate_fair_value(
-            market, performance_context=self._performance_context
+            market, 
+            performance_context=self._performance_context,
+            cash=cash,
+            portfolio_value=portfolio_value
         )
         if not ai_result:
             return None
@@ -153,7 +157,7 @@ class MispricingStrategy:
         kelly_result = self.kelly.calculate(
             fair_value=combined_fv,
             market_price=yes_price,
-            balance=balance,
+            balance=cash,  # Use cash for sizing
             direction=direction,
             confidence=confidence,
             hours_to_expiry=hours_to_expiry,
@@ -162,7 +166,7 @@ class MispricingStrategy:
         # Adaptive multiplier uygula
         original_size = kelly_result["position_size"]
         adjusted_size = original_size * (kelly_multiplier / 0.5)  # 0.5 = default
-        adjusted_size = min(adjusted_size, balance * settings.max_kelly_fraction)
+        adjusted_size = min(adjusted_size, cash * settings.max_kelly_fraction)
 
         if adjusted_size < 1.0:
             logger.debug(f"Kelly too small for {market['question'][:40]}")
@@ -197,12 +201,13 @@ class MispricingStrategy:
         )
 
     async def scan_for_signals(
-        self, markets: list[dict], balance: float,
+        self, markets: list[dict], cash: float,
+        portfolio_value: float = 0.0,
         max_signals: int = 5, kelly_multiplier: float = 0.5
     ) -> list[TradeSignal]:
         """
         Tüm marketleri tara, en iyi sinyalleri döndür.
-        V3: adaptive Kelly multiplier + performance context.
+        V3: adaptive Kelly multiplier + performance context + financial awareness.
         """
         signals = []
         analyzed = 0
@@ -210,7 +215,10 @@ class MispricingStrategy:
         for market in markets:
             try:
                 signal = await self.analyze_market(
-                    market, balance, kelly_multiplier=kelly_multiplier
+                    market, 
+                    cash=cash,
+                    portfolio_value=portfolio_value, 
+                    kelly_multiplier=kelly_multiplier
                 )
                 analyzed += 1
 

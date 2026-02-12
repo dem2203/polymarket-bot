@@ -63,13 +63,11 @@ class AIBrain:
         return input_cost + output_cost
 
     async def estimate_fair_value(self, market: dict,
-                                    performance_context: str = "") -> Optional[dict]:
+                                    performance_context: str = "",
+                                    cash: float = 0.0,
+                                    portfolio_value: float = 0.0) -> Optional[dict]:
         """
         Tek bir market için Claude'dan fair value hesapla.
-        performance_context: PerformanceTracker'dan gelen öğrenme bilgisi.
-
-        Returns:
-            {"probability": 0.XX, "confidence": 0.XX, "reasoning": "..."} veya None
         """
         try:
             question = market.get("question", "")
@@ -91,8 +89,12 @@ class AIBrain:
                 volume=volume,
             )
 
-            # Performance context'i system prompt'a enjekte et
+            # Performance context + Financial context
+            total_value = cash + portfolio_value
             system = FAIR_VALUE_SYSTEM.format(
+                balance=f"{cash:.2f}",
+                portfolio_value=f"{portfolio_value:.2f}",
+                total_value=f"{total_value:.2f}",
                 performance_context=performance_context or ""
             )
 

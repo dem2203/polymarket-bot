@@ -321,3 +321,30 @@ class TradeExecutor:
             "live": live,
             "total_volume": round(total_volume, 2),
         }
+
+    async def get_open_positions(self) -> list[dict]:
+        """
+        Polymarket API'den açık pozisyonları getir.
+        Returns: [
+            {"asset_id": "...", "size": "100", "avg_price": "0.50", "symbol": "...", ...}
+        ]
+        """
+        if self.dry_run or not self.client:
+            logger.info("⏸️ DRY RUN veya Client yok, pozisyon senkronizasyonu atlandı.")
+            return []
+
+        try:
+            # get_positions returns a list of positions
+            # Documented at: https://docs.polymarket.com/#get-positions
+            positions = self.client.get_positions(
+                limit=100,
+                offset=0
+            )
+            # Filter for non-zero size
+            open_positions = [p for p in positions if float(p.get("size", 0)) > 0]
+            
+            logger.info(f"🌍 API'den {len(open_positions)} açık pozisyon çekildi.")
+            return open_positions
+        except Exception as e:
+            logger.error(f"Pozisyon çekme hatası: {e}")
+            return []
