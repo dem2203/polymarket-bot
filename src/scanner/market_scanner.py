@@ -217,11 +217,25 @@ class MarketScanner:
             elif volume > 20000:
                 score += 5
 
-            # 4. CATEGORY SCORE
+            # 4. MOMENTUM SCORE (V3.4) — Volume/Liquidity Ratio
+            # Yüksek ciro / Düşük likidite = Fiyat patlamaya hazır (High Mobility)
+            liquidity = m.get("liquidity", 0) or 1
+            volume = m.get("volume", 0) or 0
+            turnover = volume / liquidity if liquidity > 100 else 0
+            
+            if turnover > 20: 
+                score += 25  # 🚀 ROCKET: Çok yüksek devir (Haber geldi muhtemelen)
+            elif turnover > 10:
+                score += 15  # 🔥 HOT: Yüksek devir
+            elif turnover > 5:
+                score += 5   # ⚡ ACTIVE
+
+            # 5. CATEGORY SCORE
             category = m.get("category", "general")
             score += CATEGORY_PRIORITY.get(category, 2)
 
             m["warrior_score"] = score
+            m["momentum_label"] = "🚀" if turnover > 20 else ("🔥" if turnover > 10 else "-")
 
         # Sıralama: En yüksek skor ilk
         markets.sort(key=lambda x: x.get("warrior_score", 0), reverse=True)
@@ -229,7 +243,7 @@ class MarketScanner:
         # Top skorları logla
         for m in markets[:5]:
             logger.info(
-                f"🎯 Score={m['warrior_score']:3d} | "
+                f"🎯 Score={m['warrior_score']:3d} {m.get('momentum_label', '-')} | "
                 f"{'⏰' if m.get('hours_to_expiry', 9999) < 72 else '📅'} "
                 f"{m.get('hours_to_expiry', '?'):.0f}h | "
                 f"${m['yes_price']:.2f} | {m['category'][:6]} | "
