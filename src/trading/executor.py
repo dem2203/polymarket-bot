@@ -331,7 +331,7 @@ class TradeExecutor:
         Fallback Zinciri:
         1. client.get_positions() (Varsa)
         2. GET /data/positions (Raw)
-        3. client.get_trades() -> Reconstruct (Son çare)
+        3. GET /data/trades (Raw) -> Reconstruct (Son çare)
         """
         if self.dry_run or not self.client:
             logger.info("⏸️ DRY RUN veya Client yok, pozisyon senkronizasyonu atlandı.")
@@ -379,17 +379,52 @@ class TradeExecutor:
         """Trade geçmişini tarayarak açık pozisyonları hesapla."""
         try:
             trades = []
-            # Pagination loop (get last 500 trades)
-            limit = 100
-            offset = 0
-            while len(trades) < 500:
-                batch = self.client.get_trades(limit=limit, offset=offset)
-                if not batch:
-                    break
-                trades.extend(batch)
-                if len(batch) < limit:
-                    break
-                offset += limit
+            # RAW REQUEST for trades (safe against library version issues)
+            # Endpoint: /data/trades
+            
+            if hasattr(self.client, "creds") and self.client.creds:
+                headers = {
+                    "POLY-API-KEY": self.client.creds.api_key,
+                    "POLY-API-SECRET": self.client.creds.api_secret,
+                    "POLY-PASSPHRASE": self.client.creds.api_passphrase,
+                }
+                
+                # Pagination loop
+                next_cursor = ""
+                loop_count = 0
+                
+                while loop_count < 5: # Max 5 loops (500 trades likely enough)
+                    url = f"{settings.clob_api_url}/data/trades"
+                    params = {"limit": "100"}
+                    if next_cursor:
+                        params["next_cursor"] = next_cursor
+                        
+                    resp = requests.get(url, headers=headers, params=params)
+                    
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        # data might be list or dict with 'data' and 'next_cursor'
+                        if isinstance(data, list):
+                            batch = data
+                            next_cursor = "" # No cursor in list response?
+                        elif isinstance(data, dict):
+                            batch = data.get("data", [])
+                            next_cursor = data.get("next_cursor", "")
+                        else:
+                            break
+                            
+                        if not batch:
+                            break
+                            
+                        trades.extend(batch)
+                        
+                        if not next_cursor or next_cursor == "MA==": # End of list
+                            break
+                    else:
+                        logger.warning(f"Trade fetch failed: {resp.status_code}")
+                        break
+                        
+                    loop_count += 1
             
             # Aggregate
             holdings = {}
@@ -406,13 +441,11 @@ class TradeExecutor:
                 elif side == "SELL":
                     holdings[asset_id] -= size
             
-            # Filter > 0
+            pass# Filter > 0
             positions = []
             for aid, size in holdings.items():
                 if size > 0.001:
                     positions.append({
-                        "asset_id": aid,
-                        "size": str(size),
                         "symbol": f"Asset {aid[:6]}..." # Placeholder
                     })
             
