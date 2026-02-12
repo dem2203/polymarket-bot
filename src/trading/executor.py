@@ -426,27 +426,51 @@ class TradeExecutor:
                         
                     loop_count += 1
             
-            # Aggregate
-            holdings = {}
+            # Aggregate (Calculate Weighted Average Entry Price)
+            # We need trades sorted by date ASC (Oldest first) to calculate cost basis correctly.
+            # get_trades returns newest first usually.
+            trades.reverse() # Oldest first
+            
+            holdings = {} # asset_id -> shares
+            costs = {}    # asset_id -> total_cost ($)
+            
             for t in trades:
                 asset_id = t.get("asset_id")
                 side = t.get("side") # BUY or SELL
                 size = float(t.get("size", 0))
+                price = float(t.get("price", 0))
                 
                 if asset_id not in holdings:
                     holdings[asset_id] = 0.0
+                    costs[asset_id] = 0.0
                 
                 if side == "BUY":
+                    costs[asset_id] += size * price
                     holdings[asset_id] += size
                 elif side == "SELL":
-                    holdings[asset_id] -= size
+                    # Satis yaparken maliyet ortalamasi degismez, sadece miktar azalir.
+                    # Ancak realized P/L olusur. Bizim icin kalan maliyet onemli.
+                    if holdings[asset_id] > 0:
+                        avg_price = costs[asset_id] / holdings[asset_id]
+                        costs[asset_id] -= size * avg_price
+                        holdings[asset_id] -= size
+                    else:
+                        # Short selling or error? Assuming long only.
+                        holdings[asset_id] -= size
             
-            pass# Filter > 0
+            # Filter > 0
             positions = []
             for aid, size in holdings.items():
                 if size > 0.001:
+                    avg_price = 0.0
+                    if size > 0:
+                        avg_price = costs[aid] / size
+                        
                     positions.append({
-                        "symbol": f"Asset {aid[:6]}..." # Placeholder
+                        "asset_id": aid,
+                        "size": str(size),
+                        "avgPrice": str(avg_price), # Critical for SL/TP
+                        "symbol": f"Asset {aid[:6]}..." 
                     })
             
             logger.info(f"🔄 Trade geçmişinden {len(positions)} pozisyon kurtarıldı.")
