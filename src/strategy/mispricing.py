@@ -39,6 +39,7 @@ class TradeSignal:
     deepseek_fair_value: float = 0.0
     consensus: bool = True
     combined_fair_value: float = 0.0
+    entry_price: float = 0.0
 
 
 class MispricingStrategy:
@@ -198,6 +199,7 @@ class MispricingStrategy:
             deepseek_fair_value=deepseek_fv,
             consensus=consensus,
             combined_fair_value=combined_fv,
+            entry_price=price,
         )
 
     async def scan_for_signals(
