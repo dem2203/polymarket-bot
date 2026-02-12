@@ -70,7 +70,7 @@ class RiskManager:
 
         # 6. Tek trade'de bakiyenin max %10'unu aşma
         max_single = balance * settings.max_kelly_fraction
-        if signal.position_size > max_single:
+        if signal.position_size > max_single + 0.01:  # Add $0.01 tolerance for float precision
             return False, (
                 f"⚠️ Tek trade limiti: ${signal.position_size:.2f} > ${max_single:.2f} "
                 f"(%{settings.max_kelly_fraction*100:.0f} bakiye)"
