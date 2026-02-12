@@ -46,14 +46,17 @@ class TelegramNotifier:
     async def notify_bot_started(self, balance: float, dry_run: bool):
         """Bot başladı bildirimi."""
         mode = "🔵 DRY RUN" if dry_run else "🟢 LIVE"
+        github_status = "✅" if settings.github_token and settings.github_repo else "❌"
+        
         await self.send(
-            f"🤖 <b>POLYMARKET AI BOT V2 BAŞLADI</b>\n\n"
+            f"⚔️ <b>WARRIOR BOT V3.2 BAŞLADI</b>\n\n"
             f"Mod: {mode}\n"
             f"Bakiye: <b>${balance:.2f}</b>\n"
-            f"AI Model: {settings.ai_model}\n"
-            f"Tarama: Her {settings.scan_interval // 60} dk\n"
-            f"Mispricing eşik: >{settings.mispricing_threshold:.0%}\n"
-            f"Kelly cap: %{settings.max_kelly_fraction*100:.0f}\n"
+            f"AI: {settings.ai_model}\n"
+            f"GitHub Memory: {github_status}\n"
+            f"Tarama: {settings.scan_interval}s ({settings.scan_interval // 60} dk)\n"
+            f"Mispricing: >{settings.mispricing_threshold:.0%} (Warrior)\n"
+            f"Kelly: {settings.kelly_multiplier}x (Max %{settings.max_kelly_fraction*100:.0f})\n"
             f"Stop-Loss: %{settings.stop_loss_pct*100:.0f} | TP: %{settings.take_profit_pct*100:.0f}"
         )
 
