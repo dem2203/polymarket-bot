@@ -68,8 +68,27 @@ class RiskManager:
         if signal.position_size > available_cash:
             return False, f"⚠️ Pozisyon cash'ten büyük: ${signal.position_size:.2f} > available ${available_cash:.2f}"
 
-        # 6. Tek trade'de bakiyenin max %10'unu aşma
+        # Max Single Cap Calculation
         max_single = balance * settings.max_kelly_fraction
+
+        # 5.5. Minimum Lot Kontrolü (Polymarket Min 5 Shares)
+        # V3.3.7: Borsa genellikle min 5 share istiyor.
+        MIN_SHARES = 5.0
+        if signal.entry_price and signal.entry_price > 0:
+            est_shares = signal.position_size / signal.entry_price
+            if est_shares < MIN_SHARES:
+                required_size = MIN_SHARES * signal.entry_price
+                
+                if required_size > max_single + 0.05:
+                     return False, (
+                        f"⚠️ Min 5 lot için bakiye yetersiz: ${required_size:.2f} > ${max_single:.2f} "
+                        f"(Price: {signal.entry_price})"
+                    )
+                
+                logger.info(f"⚖️ Min lot ayarı: {est_shares:.1f} -> 5.0 lot (${signal.position_size:.2f} -> ${required_size:.2f})")
+                signal.position_size = required_size
+
+        # 6. Tek trade'de bakiyenin max %10'unu aşma
         if signal.position_size > max_single + 0.01:  # Add $0.01 tolerance for float precision
             return False, (
                 f"⚠️ Tek trade limiti: ${signal.position_size:.2f} > ${max_single:.2f} "
