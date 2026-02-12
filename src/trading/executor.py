@@ -328,51 +328,97 @@ class TradeExecutor:
     async def get_open_positions(self) -> list[dict]:
         """
         Polymarket API'den açık pozisyonları getir.
-        Returns: [
-            {"asset_id": "...", "size": "100", "avg_price": "0.50", "symbol": "...", ...}
-        ]
+        Fallback Zinciri:
+        1. client.get_positions() (Varsa)
+        2. GET /data/positions (Raw)
+        3. client.get_trades() -> Reconstruct (Son çare)
         """
         if self.dry_run or not self.client:
             logger.info("⏸️ DRY RUN veya Client yok, pozisyon senkronizasyonu atlandı.")
             return []
 
+        # 1. Try Library Method (If available in future)
+        if hasattr(self.client, "get_positions"):
+            try:
+                positions = self.client.get_positions(limit=100, offset=0)
+                return [p for p in positions if float(p.get("size", 0)) > 0]
+            except Exception as e:
+                logger.warning(f"Library get_positions failed: {e}")
+
+        # 2. Try Raw Request (Official Endpoint)
         try:
-            # TRY RAW REQUEST FIRST (More reliable if wrapper is outdated)
-            # method 1: Use client's creds
             if hasattr(self.client, "creds") and self.client.creds:
                 creds = self.client.creds
-                url = f"{settings.clob_api_url}/data/positions"
                 headers = {
                     "POLY-API-KEY": creds.api_key,
                     "POLY-API-SECRET": creds.api_secret,
                     "POLY-PASSPHRASE": creds.api_passphrase,
                 }
                 
-                # Use sync requests (startup only, OK to block)
-                resp = requests.get(url, headers=headers)
+                # Try with params
+                url = f"{settings.clob_api_url}/data/positions"
+                params = {"limit": "100", "offset": "0"}
+                resp = requests.get(url, headers=headers, params=params)
                 
                 if resp.status_code == 200:
                     positions = resp.json()
-                    # Response is list of dicts
                     if isinstance(positions, list):
-                        open_positions = [p for p in positions if float(p.get("size", 0)) > 0]
-                        logger.info(f"🌍 API (Raw): {len(open_positions)} açık pozisyon çekildi.")
-                        return open_positions
-                    else:
-                        logger.warning(f"API response format unexpected: {type(positions)}")
+                        logger.info(f"🌍 RAW API: {len(positions)} pozisyon bulundu.")
+                        return [p for p in positions if float(p.get("size", 0)) > 0]
                 else:
-                    logger.warning(f"Raw API request failed: {resp.status_code} {resp.text}")
-
-            # Fallback to library method if it exists (for future comp)
-            if hasattr(self.client, "get_positions"):
-                positions = self.client.get_positions(limit=100, offset=0)
-                open_positions = [p for p in positions if float(p.get("size", 0)) > 0]
-                return open_positions
-            
-            # If both fail
-            logger.error("❌ get_positions metodu yok ve Raw Request başarısız oldu.")
-            return []
+                    logger.warning(f"RAW API (/data/positions) failed: {resp.status_code}")
 
         except Exception as e:
-            logger.error(f"Pozisyon çekme hatası: {e}")
+            logger.error(f"Raw Request error: {e}")
+
+        # 3. Fallback: Reconstruct from Trades (Slow but works)
+        logger.info("⚠️ Pozisyon endpointleri başarısız. Trade geçmişinden hesaplanıyor...")
+        return self._derive_positions_from_trades()
+
+    def _derive_positions_from_trades(self) -> list[dict]:
+        """Trade geçmişini tarayarak açık pozisyonları hesapla."""
+        try:
+            trades = []
+            # Pagination loop (get last 500 trades)
+            limit = 100
+            offset = 0
+            while len(trades) < 500:
+                batch = self.client.get_trades(limit=limit, offset=offset)
+                if not batch:
+                    break
+                trades.extend(batch)
+                if len(batch) < limit:
+                    break
+                offset += limit
+            
+            # Aggregate
+            holdings = {}
+            for t in trades:
+                asset_id = t.get("asset_id")
+                side = t.get("side") # BUY or SELL
+                size = float(t.get("size", 0))
+                
+                if asset_id not in holdings:
+                    holdings[asset_id] = 0.0
+                
+                if side == "BUY":
+                    holdings[asset_id] += size
+                elif side == "SELL":
+                    holdings[asset_id] -= size
+            
+            # Filter > 0
+            positions = []
+            for aid, size in holdings.items():
+                if size > 0.001:
+                    positions.append({
+                        "asset_id": aid,
+                        "size": str(size),
+                        "symbol": f"Asset {aid[:6]}..." # Placeholder
+                    })
+            
+            logger.info(f"🔄 Trade geçmişinden {len(positions)} pozisyon kurtarıldı.")
+            return positions
+            
+        except Exception as e:
+            logger.error(f"Trade history reconstruction failed: {e}")
             return []

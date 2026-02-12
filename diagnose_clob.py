@@ -8,11 +8,8 @@ from src.config import settings
 
 def diagnose():
     try:
-        if not settings.polymarket_private_key:
-            print("[X] Private key missing")
-            return
-
-        pk = settings.polymarket_private_key.strip().replace('"', '').replace("'", "")
+        # Use dummy key for introspection
+        pk = "0x" + "1" * 64
         client = ClobClient(
             host=settings.clob_api_url,
             key=pk,
