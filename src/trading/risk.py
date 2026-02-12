@@ -69,7 +69,12 @@ class RiskManager:
             return False, f"⚠️ Pozisyon cash'ten büyük: ${signal.position_size:.2f} > available ${available_cash:.2f}"
 
         # Max Single Cap Calculation
-        max_single = balance * settings.max_kelly_fraction
+        # V3.3.12: Small Account Floor (Küçük hesaplarda $3.00'a kadar izin ver)
+        percent_cap = balance * settings.max_kelly_fraction
+        max_single = max(percent_cap, 3.00)
+        
+        # Ama ASLA available cash'i geçemez
+        max_single = min(max_single, available_cash)
 
         # 5.5. Minimum Lot Kontrolü (Polymarket Min 5 Shares)
         # V3.3.7: Borsa genellikle min 5 share istiyor.

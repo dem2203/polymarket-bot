@@ -470,16 +470,25 @@ class PolymarketBot:
         await self.telegram.notify_scan_report(report)
 
     async def _monitor_positions(self):
-        """Açık pozisyonları izle — SL/TP kontrolü + GERÇEK SELL emri."""
+        """Açık pozisyonları izle — SL/TP + Smart Expiry Exit."""
         market_prices = {}
+        market_end_dates = {}
 
         for market_id, position in self.positions.open_positions.items():
             try:
                 if settings.dry_run:
+                    # Dry run: Test için fake end_date (2 saat kaldı diyelim)
+                    market_end_dates[market_id] = None # datetime.now().isoformat()
                     market_prices[market_id] = position.entry_price
                 else:
                     detail = await self.scanner.get_market_details(market_id)
                     if detail:
+                        # End date al
+                        ed = detail.get("endDate", detail.get("end_date_iso"))
+                        if ed:
+                            market_end_dates[market_id] = ed
+                        
+                        # Fiyat al
                         prices = detail.get("outcomePrices", "")
                         if prices:
                             import json
@@ -491,19 +500,86 @@ class PolymarketBot:
             except Exception as e:
                 logger.debug(f"Fiyat güncelleme hatası {market_id}: {e}")
 
-        # Pozisyon durumlarını logla
+        # Pozisyon durumlarını logla ve Expiry Analizi yap
+        expiry_exits = []
+        import time as time_mod
+        from datetime import datetime, timezone, timedelta
+
+        # ISO formatlarını parse etmek için
+        def parse_iso(date_str):
+            try:
+                return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            except:
+                return None
+
+        # Şimdiki zaman (UTC)
+        now_utc = datetime.now(timezone.utc)
+
         for market_id, position in self.positions.open_positions.items():
             if market_id in market_prices:
                 price = market_prices[market_id]
                 pnl_pct = (price - position.entry_price) / position.entry_price if position.entry_price > 0 else 0
                 emoji = "🟢" if pnl_pct >= 0 else "🔴"
+                
+                # Expiry check logic
+                end_date_str = market_end_dates.get(market_id)
+                expiry_msg = ""
+                
+                if end_date_str:
+                    end_date = parse_iso(end_date_str)
+                    if end_date:
+                        # Time remaining calculation
+                        time_rem = end_date - now_utc
+                        hours_rem = time_rem.total_seconds() / 3600
+                        expiry_msg = f"| ⏳ {hours_rem:.1f}h"
+
+                        # 1. Last Hour Panic: 1 saatten az kaldı ve kâr > %0 -> SAT
+                        if hours_rem < 1.0 and pnl_pct > 0.0:
+                            expiry_exits.append({
+                                "market_id": market_id,
+                                "token_id": position.token_id,
+                                "shares": position.shares,
+                                "price": price,
+                                "reason": f"EXPIRY_PANIC (<1h, PnL={pnl_pct:.1%})",
+                            })
+
+                        # 2. Critical Zone: 6 saatten az kaldı
+                        elif hours_rem < 6.0:
+                            # Eğer kâr %2'nin altındaysa (veya zarardaysa) -> RİSK ALMA, ÇIK.
+                            # Ama kâr %2+ ise -> TUT (User'ın isteği: upside kalsın).
+                            if pnl_pct < 0.02:
+                                expiry_exits.append({
+                                    "market_id": market_id,
+                                    "token_id": position.token_id,
+                                    "shares": position.shares,
+                                    "price": price,
+                                    "reason": f"EXPIRY_WEAK (<6h, PnL={pnl_pct:.1%})",
+                                })
+
+                        # 3. Last 24 Hours: Stop Loss Tighten (-10%)
+                        elif hours_rem < 24.0:
+                             if pnl_pct < -0.10:
+                                 expiry_exits.append({
+                                    "market_id": market_id,
+                                    "token_id": position.token_id,
+                                    "shares": position.shares,
+                                    "price": price,
+                                    "reason": f"EXPIRY_STOP_TIGHTEN (<24h, PnL={pnl_pct:.1%})",
+                                })
+
                 logger.info(
                     f"{emoji} Pozisyon: {position.question[:35]}... | "
                     f"Giriş: ${position.entry_price:.3f} → Şimdi: ${price:.3f} | "
-                    f"PnL: {pnl_pct:+.1%} | Shares: {position.shares:.1f}"
+                    f"PnL: {pnl_pct:+.1%} | Shares: {position.shares:.1f} {expiry_msg}"
                 )
 
         to_close = self.positions.check_stop_loss_take_profit(market_prices)
+        
+        # Expiry cleanups
+        for exit_info in expiry_exits:
+            # Eğer zaten SL/TP listesindeyse tekrar ekleme
+            if not any(x["market_id"] == exit_info["market_id"] for x in to_close):
+                to_close.append(exit_info)
 
         for close_info in to_close:
             market_id = close_info["market_id"]
@@ -598,7 +674,7 @@ class PolymarketBot:
                     zombies.append(market_id)
 
         for mid in zombies:
-            self.positions.close_position(mid, EXIT_PRICE=0.0, local_only=True)
+            self.positions.close_position(mid, exit_price=0.0, local_only=True)
 
 
     def shutdown(self, signum=None, frame=None):
