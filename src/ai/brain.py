@@ -111,12 +111,18 @@ class AIBrain:
             # Yanıtı parse et
             text = response.content[0].text.strip()
 
-            # JSON'u çıkar (bazen markdown code block içinde olabilir)
+            # JSON'u çıkar (bazen markdown code block veya ekstra metin olabilir)
             if "```" in text:
                 text = text.split("```")[1]
                 if text.startswith("json"):
                     text = text[4:]
                 text = text.strip()
+
+            # Robust JSON extraction: ilk { ile son } arasını al
+            json_start = text.find("{")
+            json_end = text.rfind("}")
+            if json_start != -1 and json_end != -1 and json_end > json_start:
+                text = text[json_start:json_end + 1]
 
             result = json.loads(text)
 

@@ -80,15 +80,26 @@ class MispricingStrategy:
         reasoning = ai_result["reasoning"]
         api_cost = ai_result["api_cost"]
 
-        # Düşük güvenli tahminleri atla
-        if confidence < 0.55:
+        question = market.get("question", "")[:40]
+        yes_price = float(market.get("yes_price", 0.5))
+        
+        # Debug: AI ne düşünüyor?
+        edge_raw = abs(fair_value - yes_price)
+        logger.info(
+            f"🧠 AI: {question}... | FV={fair_value:.2f} vs Mkt={yes_price:.2f} "
+            f"| Edge={edge_raw:.1%} | Conf={confidence:.0%}"
+        )
+
+        # Düşük güvenli tahminleri atla (Warrior: 0.45'e düşürüldü)
+        if confidence < 0.45:
+            logger.debug(f"⏭️ Düşük güven ({confidence:.0%}) — atlandı: {question}")
             return None
 
         # 2. Ön mispricing kontrolü (DeepSeek'i gereksiz yere çağırmamak için)
-        yes_price = float(market.get("yes_price", 0.5))
         pre_mispricing = self.brain.detect_mispricing(fair_value, yes_price)
 
         if not pre_mispricing["has_edge"]:
+            logger.debug(f"⏭️ Edge yok ({edge_raw:.1%} < {settings.mispricing_threshold:.0%}) — atlandı: {question}")
             return None
 
         # 3. DeepSeek Consensus Check (sadece edge varsa çağır — maliyet optimizasyonu)
