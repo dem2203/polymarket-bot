@@ -356,6 +356,11 @@ class PolymarketBot:
         cycle_api_cost = 0.0
         markets_to_analyze = []
 
+        # Calculate Portfolio Value (Always calculate for accurate logging/risk)
+        portfolio_summary = self.positions.get_portfolio_summary(self.balance)
+        portfolio_value = portfolio_summary.get("total_exposure", 0.0)
+        total_value = self.balance + portfolio_value
+
         if available_cash >= 2.0:
             markets_to_analyze = [
                 m for m in markets if not self.positions.has_position(m["id"])
@@ -369,11 +374,6 @@ class PolymarketBot:
 
             # Adaptive Kelly multiplier
             kelly_mult = self.adaptive_kelly.get_multiplier()
-
-            # Portfolio Value (Cash + Positions)
-            portfolio_summary = self.positions.get_portfolio_summary(self.balance)
-            portfolio_value = portfolio_summary.get("total_exposure", 0.0)
-            total_value = self.balance + portfolio_value
             
             logger.info(f"💰 Cash: ${self.balance:.2f} | Portfolio: ${portfolio_value:.2f} | Total: ${total_value:.2f}")
 
@@ -400,7 +400,7 @@ class PolymarketBot:
         for signal in signals:
             allowed, reason = self.risk.is_trade_allowed(
                 signal=signal,
-                balance=self.balance,
+                balance=total_value,
                 total_exposure=self.positions.total_exposure,
                 open_positions=len(self.positions.open_positions),
             )
