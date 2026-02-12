@@ -584,6 +584,23 @@ class PolymarketBot:
                 if settings.enable_self_learning:
                     self.perf_tracker.close_trade(market_id, price, closed.realized_pnl)
 
+        # 🧟 ZOMBIE CLEANUP: Değeri $0 olan ve süresi dolmuş pozisyonları temizle
+        zombies = []
+        for market_id, position in self.positions.open_positions.items():
+            if market_id in market_prices:
+                price = market_prices[market_id]
+                # Fiyat 0.2 centin altındaysa (%0.002) ve 1 saatten yaşlıysa -> ZOMBIE
+                if price < 0.002 and (time.time() - position.opened_at > 3600):
+                    logger.warning(
+                        f"🧟 ZOMBIE DETECTED: {position.question[:35]}... | "
+                        f"Price=${price:.4f} (~$0) | Takipten çıkarılıyor..."
+                    )
+                    zombies.append(market_id)
+
+        for mid in zombies:
+            self.positions.close_position(mid, EXIT_PRICE=0.0, local_only=True)
+
+
     def shutdown(self, signum=None, frame=None):
         logger.info("🛑 Shutdown sinyali alındı...")
         self.running = False

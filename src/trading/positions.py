@@ -150,11 +150,18 @@ class PositionTracker:
         self.save_positions()
         logger.info(f"🔄 Senkronize edildi: {token_side} {shares:.1f} @ ${entry_price:.2f} | {question[:40]}")
 
-    def close_position(self, market_id: str, exit_price: float) -> Optional[ClosedPosition]:
-        """Pozisyon kapat, PnL hesapla."""
+    def close_position(self, market_id: str, exit_price: float, local_only: bool = False) -> Optional[ClosedPosition]:
+        """
+        Pozisyonu kapat, PnL hesapla.
+        local_only=True ise sadece takipten çıkar (zincirde işlem yapmaz).
+        """
         position = self.open_positions.pop(market_id, None)
         if not position:
             return None
+
+        # Eğer local_only ise (örn: süresi dolmuş $0 pozisyon), exit_price 0 kabul edilir.
+        if local_only:
+            exit_price = 0.0
 
         realized_pnl = (exit_price - position.entry_price) * position.shares
         pnl_pct = (exit_price - position.entry_price) / position.entry_price if position.entry_price > 0 else 0
@@ -177,9 +184,11 @@ class PositionTracker:
         self.daily_pnl += realized_pnl
         self.save_positions()
 
-        emoji = "🟢" if realized_pnl >= 0 else "🔴"
+        emoji = "🗑️" if local_only else ("🟢" if realized_pnl >= 0 else "🔴")
+        action = "Temizlendi (Expired)" if local_only else "Kapatıldı"
+        
         logger.info(
-            f"{emoji} Pozisyon kapatıldı: ${realized_pnl:+.2f} ({pnl_pct:+.1%}) "
+            f"{emoji} Pozisyon {action}: ${realized_pnl:+.2f} ({pnl_pct:+.1%}) "
             f"| {position.question[:40]}..."
         )
         return closed
