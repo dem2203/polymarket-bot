@@ -5,6 +5,7 @@ DRY_RUN modunda simülasyon yapar.
 
 import logging
 import time
+import requests
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -322,6 +323,8 @@ class TradeExecutor:
             "total_volume": round(total_volume, 2),
         }
 
+
+
     async def get_open_positions(self) -> list[dict]:
         """
         Polymarket API'den açık pozisyonları getir.
@@ -334,17 +337,42 @@ class TradeExecutor:
             return []
 
         try:
-            # get_positions returns a list of positions
-            # Documented at: https://docs.polymarket.com/#get-positions
-            positions = self.client.get_positions(
-                limit=100,
-                offset=0
-            )
-            # Filter for non-zero size
-            open_positions = [p for p in positions if float(p.get("size", 0)) > 0]
+            # TRY RAW REQUEST FIRST (More reliable if wrapper is outdated)
+            # method 1: Use client's creds
+            if hasattr(self.client, "creds") and self.client.creds:
+                creds = self.client.creds
+                url = f"{settings.clob_api_url}/data/positions"
+                headers = {
+                    "POLY-API-KEY": creds.api_key,
+                    "POLY-API-SECRET": creds.api_secret,
+                    "POLY-PASSPHRASE": creds.api_passphrase,
+                }
+                
+                # Use sync requests (startup only, OK to block)
+                resp = requests.get(url, headers=headers)
+                
+                if resp.status_code == 200:
+                    positions = resp.json()
+                    # Response is list of dicts
+                    if isinstance(positions, list):
+                        open_positions = [p for p in positions if float(p.get("size", 0)) > 0]
+                        logger.info(f"🌍 API (Raw): {len(open_positions)} açık pozisyon çekildi.")
+                        return open_positions
+                    else:
+                        logger.warning(f"API response format unexpected: {type(positions)}")
+                else:
+                    logger.warning(f"Raw API request failed: {resp.status_code} {resp.text}")
+
+            # Fallback to library method if it exists (for future comp)
+            if hasattr(self.client, "get_positions"):
+                positions = self.client.get_positions(limit=100, offset=0)
+                open_positions = [p for p in positions if float(p.get("size", 0)) > 0]
+                return open_positions
             
-            logger.info(f"🌍 API'den {len(open_positions)} açık pozisyon çekildi.")
-            return open_positions
+            # If both fail
+            logger.error("❌ get_positions metodu yok ve Raw Request başarısız oldu.")
+            return []
+
         except Exception as e:
             logger.error(f"Pozisyon çekme hatası: {e}")
             return []
