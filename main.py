@@ -263,32 +263,47 @@ class PolymarketBot:
         if arb_signals:
             logger.info(f"🔄 {len(arb_signals)} arbitraj fırsatı bulundu")
 
-        # 3. AI-powered mispricing analizi (dual-AI)
-        markets_to_analyze = [
-            m for m in markets if not self.positions.has_position(m["id"])
-        ]
-        max_analyze = min(50, len(markets_to_analyze))
-        markets_to_analyze = markets_to_analyze[:max_analyze]
+        # 3. Nakit kontrolü — yoksa analiz yapma (API tasarrufu!)
+        available_cash = self.balance - self.positions.total_exposure
+        if available_cash < 2.0 and not self.positions.open_positions:
+            logger.info(f"💰 Yeterli nakit yok (${available_cash:.2f}), sadece izleme modu")
+            return
 
-        logger.info(f"🧠 {max_analyze} market {'dual-AI' if self.deepseek.enabled else 'AI'} ile analiz ediliyor...")
-        pre_cost = self.brain.total_api_cost
+        # 4. AI-powered mispricing analizi (dual-AI)
+        # Nakit varsa yeni trade ara, yoksa sadece mevcut pozisyonları izle
+        signals = []
+        cycle_api_cost = 0.0
+        markets_to_analyze = []
 
-        # Adaptive Kelly multiplier
-        kelly_mult = self.adaptive_kelly.get_multiplier()
+        if available_cash >= 2.0:
+            markets_to_analyze = [
+                m for m in markets if not self.positions.has_position(m["id"])
+            ]
+            max_analyze = min(50, len(markets_to_analyze))
+            markets_to_analyze = markets_to_analyze[:max_analyze]
 
-        signals = await self.strategy.scan_for_signals(
-            markets_to_analyze, self.balance,
-            max_signals=5, kelly_multiplier=kelly_mult
-        )
+            logger.info(f"🧠 {max_analyze} market {'dual-AI' if self.deepseek.enabled else 'AI'} ile analiz ediliyor...")
+            pre_cost = self.brain.total_api_cost
 
-        post_cost = self.brain.total_api_cost
-        cycle_api_cost = post_cost - pre_cost
-        # DeepSeek maliyetini de ekle
-        if self.deepseek.enabled:
-            cycle_api_cost += self.deepseek.total_cost
-        self.economics.record_api_cost(cycle_api_cost, max_analyze)
+            # Adaptive Kelly multiplier
+            kelly_mult = self.adaptive_kelly.get_multiplier()
 
-        # 4. Her sinyal için risk kontrolü ve emir yürütme
+            signals = await self.strategy.scan_for_signals(
+                markets_to_analyze, self.balance,
+                max_signals=5, kelly_multiplier=kelly_mult
+            )
+
+            post_cost = self.brain.total_api_cost
+            cycle_api_cost = post_cost - pre_cost
+            # DeepSeek maliyetini de ekle
+            if self.deepseek.enabled:
+                cycle_api_cost += self.deepseek.total_cost
+            self.economics.record_api_cost(cycle_api_cost, max_analyze)
+        else:
+            kelly_mult = self.adaptive_kelly.get_multiplier()
+            logger.info(f"⏸️ Nakit yetersiz (${available_cash:.2f}), yeni trade aranmıyor — sadece pozisyon izleme")
+
+        # 5. Her sinyal için risk kontrolü ve emir yürütme
         trades_executed = 0
 
         for signal in signals:
@@ -305,7 +320,9 @@ class PolymarketBot:
 
             order = await self.executor.execute_signal(signal)
             if order:
-                self.positions.open_position(order)
+                # Token ID'yi kaydet (SELL için gerekli!)
+                token_id = self.executor._get_token_id(signal) or ""
+                self.positions.open_position(order, token_id=token_id)
                 self.risk.record_trade()
                 await self.telegram.notify_trade_opened(signal)
                 trades_executed += 1
@@ -318,7 +335,7 @@ class PolymarketBot:
                         deepseek_fv=signal.deepseek_fair_value,
                     )
 
-        # 5. Pozisyon izleme (SL/TP)
+        # 6. Pozisyon izleme (SL/TP + GERÇEK SATIŞ)
         if self.positions.open_positions:
             await self._monitor_positions()
 
@@ -362,7 +379,7 @@ class PolymarketBot:
         await self.telegram.notify_scan_report(report)
 
     async def _monitor_positions(self):
-        """Açık pozisyonları izle — SL/TP kontrolü."""
+        """Açık pozisyonları izle — SL/TP kontrolü + GERÇEK SELL emri."""
         market_prices = {}
 
         for market_id, position in self.positions.open_positions.items():
@@ -383,24 +400,54 @@ class PolymarketBot:
             except Exception as e:
                 logger.debug(f"Fiyat güncelleme hatası {market_id}: {e}")
 
+        # Pozisyon durumlarını logla
+        for market_id, position in self.positions.open_positions.items():
+            if market_id in market_prices:
+                price = market_prices[market_id]
+                pnl_pct = (price - position.entry_price) / position.entry_price if position.entry_price > 0 else 0
+                emoji = "🟢" if pnl_pct >= 0 else "🔴"
+                logger.info(
+                    f"{emoji} Pozisyon: {position.question[:35]}... | "
+                    f"Giriş: ${position.entry_price:.3f} → Şimdi: ${price:.3f} | "
+                    f"PnL: {pnl_pct:+.1%} | Shares: {position.shares:.1f}"
+                )
+
         to_close = self.positions.check_stop_loss_take_profit(market_prices)
 
-        for market_id in to_close:
-            position = self.positions.open_positions.get(market_id)
-            if position:
-                await self.telegram.notify_stop_loss(position)
-                current_price = market_prices.get(market_id, position.current_price)
-                closed = self.positions.close_position(market_id, current_price)
-                if closed:
-                    self.economics.record_trade_pnl(closed.realized_pnl)
-                    self.risk.record_trade(closed.realized_pnl)
-                    await self.telegram.notify_trade_closed(closed)
+        for close_info in to_close:
+            market_id = close_info["market_id"]
+            token_id = close_info["token_id"]
+            shares = close_info["shares"]
+            price = close_info["price"]
+            reason = close_info["reason"]
 
-                    # V3: Trade sonucunu kaydet (learning)
-                    if settings.enable_self_learning:
-                        self.perf_tracker.close_trade(
-                            market_id, current_price, closed.realized_pnl
-                        )
+            position = self.positions.open_positions.get(market_id)
+            if not position:
+                continue
+
+            # 🔴 GERÇEK SELL EMRİ GÖNDER!
+            if token_id:
+                sell_result = await self.executor.sell_position(token_id, shares, price)
+                if sell_result:
+                    logger.info(f"🔴 SELL emri başarılı: {sell_result.order_id} | {reason}")
+                else:
+                    logger.error(f"❌ SELL emri başarısız: {market_id} | {reason}")
+                    continue  # Satış başarısızsa pozisyonu kapatma
+            else:
+                logger.warning(f"⚠️ Token ID yok, sadece dahili kapatma: {market_id}")
+
+            await self.telegram.notify_stop_loss(position)
+            closed = self.positions.close_position(market_id, price)
+            if closed:
+                self.economics.record_trade_pnl(closed.realized_pnl)
+                self.risk.record_trade(closed.realized_pnl)
+                await self.telegram.notify_trade_closed(closed)
+
+                # V3: Trade sonucunu kaydet (learning)
+                if settings.enable_self_learning:
+                    self.perf_tracker.close_trade(
+                        market_id, price, closed.realized_pnl
+                    )
 
     def shutdown(self, signum=None, frame=None):
         logger.info("🛑 Shutdown sinyali alındı...")

@@ -185,6 +185,62 @@ class TradeExecutor:
         else:
             return tokens[1] if len(tokens) > 1 else None
 
+    async def sell_position(self, token_id: str, shares: float, price: float) -> Optional[ExecutedOrder]:
+        """
+        Pozisyon sat — SELL emri gönder.
+        SL/TP tetiklendiğinde çağrılır.
+        """
+        if self.dry_run:
+            self._order_counter += 1
+            order_id = f"SIM-SELL-{self._order_counter:04d}"
+            logger.info(f"🔵 [DRY RUN] SELL simüle: {order_id} | {shares:.1f} shares @ ${price:.3f}")
+            return ExecutedOrder(
+                order_id=order_id, market_id="", question="",
+                side="SELL", token_side="", price=price,
+                size=shares * price, shares=shares,
+                status="SIMULATED", timestamp=time.time(), is_simulated=True,
+            )
+
+        if not self.client:
+            logger.error("❌ CLOB client hazır değil — SELL gönderilemedi")
+            return None
+
+        try:
+            order_args = OrderArgs(
+                price=round(price, 2),
+                size=round(shares, 2),
+                side=SELL,
+                token_id=token_id,
+            )
+
+            response = self.client.create_and_post_order(order_args)
+            self._order_counter += 1
+            order_id = response.get("orderID", f"SELL-{self._order_counter:04d}")
+
+            order = ExecutedOrder(
+                order_id=order_id, market_id="", question="",
+                side="SELL", token_side="", price=price,
+                size=shares * price, shares=shares,
+                status="PENDING", timestamp=time.time(), is_simulated=False,
+            )
+            self.executed_orders.append(order)
+            logger.info(f"🔴 [LIVE] SELL emri gönderildi: {order_id} | {shares:.1f} shares @ ${price:.3f}")
+            return order
+
+        except Exception as e:
+            logger.error(f"❌ SELL emri hatası: {e}")
+            return None
+
+    def get_open_orders(self) -> list:
+        """Açık emirleri sorgula."""
+        if not self.client:
+            return []
+        try:
+            return self.client.get_orders() or []
+        except Exception as e:
+            logger.warning(f"Açık emir sorgusu hatası: {e}")
+            return []
+
     def get_balance(self) -> float:
         """Mevcut USDC bakiyesini sorgula."""
         if self.dry_run or not self.client:

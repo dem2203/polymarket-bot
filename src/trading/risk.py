@@ -20,8 +20,8 @@ class RiskManager:
         self.daily_loss = 0.0
         self.daily_trades = 0
         self._last_reset = time.time()
-        self.max_daily_trades = 20       # Günlük max trade
-        self.max_concurrent = 10          # Max açık pozisyon
+        self.max_daily_trades = 30       # Günlük max trade
+        self.min_trade_cash = 2.0        # Minimum $2 nakit olmalı
 
     def _maybe_reset_daily(self):
         """24 saat geçtiyse günlük sayaçları sıfırla."""
@@ -40,6 +40,7 @@ class RiskManager:
     ) -> tuple[bool, str]:
         """
         Trade'e izin ver veya reddet.
+        Pozisyon limiti YOK — available cash'e göre karar verir.
         
         Returns:
             (allowed: bool, reason: str)
@@ -58,18 +59,16 @@ class RiskManager:
         if self.daily_trades >= self.max_daily_trades:
             return False, f"⚠️ Günlük trade limiti: {self.daily_trades}/{self.max_daily_trades}"
 
-        # 4. Max concurrent pozisyon
-        if open_positions >= self.max_concurrent:
-            return False, f"⚠️ Max açık pozisyon: {open_positions}/{self.max_concurrent}"
+        # 4. Yeterli nakit var mı? (Max pozisyon limiti yok!)
+        available_cash = balance - total_exposure
+        if available_cash < self.min_trade_cash:
+            return False, f"💰 Yeterli nakit yok: Available ${available_cash:.2f} < ${self.min_trade_cash:.2f}"
 
-        # 5. Toplam exposure kontrolü
-        new_exposure = total_exposure + signal.position_size
-        if new_exposure > settings.max_total_exposure:
-            return False, (
-                f"⚠️ Exposure limiti: ${new_exposure:.2f} > ${settings.max_total_exposure:.2f}"
-            )
+        # 5. Pozisyon büyüklüğü available cash'i aşmasın
+        if signal.position_size > available_cash:
+            return False, f"⚠️ Pozisyon cash'ten büyük: ${signal.position_size:.2f} > available ${available_cash:.2f}"
 
-        # 6. Tek trade'de bakiyenin max %6'sını aşma
+        # 6. Tek trade'de bakiyenin max %10'unu aşma
         max_single = balance * settings.max_kelly_fraction
         if signal.position_size > max_single:
             return False, (
@@ -77,15 +76,11 @@ class RiskManager:
                 f"(%{settings.max_kelly_fraction*100:.0f} bakiye)"
             )
 
-        # 7. Pozisyon büyüklüğü bakiyeyi aşmasın
-        if signal.position_size > balance * 0.5:
-            return False, f"⚠️ Pozisyon çok büyük: ${signal.position_size:.2f} > bakiyenin %50'si"
-
-        # 8. Minimum edge kontrolü
+        # 7. Minimum edge kontrolü
         if signal.edge < settings.mispricing_threshold:
             return False, f"⚠️ Edge çok düşük: {signal.edge:.1%} < {settings.mispricing_threshold:.1%}"
 
-        # 9. Minimum güven
+        # 8. Minimum güven
         if signal.confidence < 0.55:
             return False, f"⚠️ Güven çok düşük: {signal.confidence:.1%}"
 

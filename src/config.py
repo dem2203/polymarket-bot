@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # ---- Trading ----
     dry_run: bool = True
     starting_balance: float = 34.56
-    max_kelly_fraction: float = 0.06      # Max %6 sermaye/trade
+    max_kelly_fraction: float = 0.10      # Max %10 sermaye/trade (büyük, anlamlı pozisyonlar)
     kelly_multiplier: float = 0.5          # Fractional Kelly
 
     # ---- Risk ----

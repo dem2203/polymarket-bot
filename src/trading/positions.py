@@ -24,6 +24,7 @@ class Position:
     shares: float
     cost_basis: float    # Toplam maliyet ($)
     current_price: float
+    token_id: str = ""   # CLOB token ID (SELL için gerekli!)
     unrealized_pnl: float = 0.0
     pnl_pct: float = 0.0
     opened_at: float = 0.0
@@ -60,7 +61,7 @@ class PositionTracker:
         self.daily_pnl: float = 0.0
         self._last_daily_reset: float = time.time()
 
-    def open_position(self, order: ExecutedOrder) -> Position:
+    def open_position(self, order: ExecutedOrder, token_id: str = "") -> Position:
         """Yeni pozisyon aç."""
         position = Position(
             market_id=order.market_id,
@@ -70,6 +71,7 @@ class PositionTracker:
             shares=order.shares,
             cost_basis=order.size,
             current_price=order.price,
+            token_id=token_id,
             opened_at=time.time(),
         )
 
@@ -113,12 +115,13 @@ class PositionTracker:
         )
         return closed
 
-    def check_stop_loss_take_profit(self, market_prices: dict) -> list[str]:
+    def check_stop_loss_take_profit(self, market_prices: dict) -> list[dict]:
         """
         Tüm açık pozisyonlarda SL/TP kontrol et.
         market_prices: {market_id: current_yes_price}
         
-        Returns: Kapatılması gereken market_id listesi
+        Returns: Kapatılması gereken pozisyon bilgileri listesi
+        [{"market_id": ..., "token_id": ..., "shares": ..., "price": ..., "reason": ...}]
         """
         to_close = []
 
@@ -135,7 +138,13 @@ class PositionTracker:
                     f"🛑 STOP-LOSS tetiklendi: {position.question[:40]}... "
                     f"| PnL={position.pnl_pct:.1%}"
                 )
-                to_close.append(market_id)
+                to_close.append({
+                    "market_id": market_id,
+                    "token_id": position.token_id,
+                    "shares": position.shares,
+                    "price": new_price,
+                    "reason": "STOP_LOSS",
+                })
                 continue
 
             # Take-profit kontrolü
@@ -144,7 +153,13 @@ class PositionTracker:
                     f"🎉 TAKE-PROFIT tetiklendi: {position.question[:40]}... "
                     f"| PnL={position.pnl_pct:.1%}"
                 )
-                to_close.append(market_id)
+                to_close.append({
+                    "market_id": market_id,
+                    "token_id": position.token_id,
+                    "shares": position.shares,
+                    "price": new_price,
+                    "reason": "TAKE_PROFIT",
+                })
 
         return to_close
 
