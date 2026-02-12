@@ -43,19 +43,19 @@ class Settings(BaseSettings):
     # ---- Trading ----
     dry_run: bool = True
     starting_balance: float = 34.56
-    max_kelly_fraction: float = 0.10      # Max %10 sermaye/trade (büyük, anlamlı pozisyonlar)
-    kelly_multiplier: float = 0.5          # Fractional Kelly
+    max_kelly_fraction: float = 0.15      # Max %15 sermaye/trade (WARRIOR: cesur pozisyonlar)
+    kelly_multiplier: float = 0.7          # Agresif Kelly (0.5 → 0.7)
 
     # ---- Risk ----
-    mispricing_threshold: float = 0.08     # >%8 fark = trade
-    stop_loss_pct: float = 0.20
+    mispricing_threshold: float = 0.05     # >%5 fark = trade (WARRIOR: daha fazla fırsat)
+    stop_loss_pct: float = 0.15            # WARRIOR: sıkı stop-loss (%20 → %15)
     take_profit_pct: float = 0.25
     daily_loss_limit: float = 25.0
     survival_balance: float = 5.0
     max_total_exposure: float = 100.0
 
     # ---- Scanning ----
-    scan_interval: int = 600               # 10 dakika
+    scan_interval: int = 300               # WARRIOR: 5 dakikada bir tara (hız = para)
     min_volume: float = 10000.0
     min_liquidity: float = 1000.0
     max_markets_per_scan: int = 1000

@@ -137,13 +137,15 @@ class MispricingStrategy:
             f"Price={yes_price:.2f} | Edge={edge:.1%} | {direction}"
         )
 
-        # 5. Kelly Criterion (adaptive multiplier)
+        # 5. Kelly Criterion (adaptive multiplier + time bonus)
+        hours_to_expiry = market.get("hours_to_expiry", 9999)
         kelly_result = self.kelly.calculate(
             fair_value=combined_fv,
             market_price=yes_price,
             balance=balance,
             direction=direction,
             confidence=confidence,
+            hours_to_expiry=hours_to_expiry,
         )
 
         # Adaptive multiplier uygula

@@ -258,10 +258,34 @@ class PolymarketBot:
             logger.warning("⚠️ Hiç market bulunamadı")
             return
 
-        # 2. Arbitraj kontrolü (hızlı, AI gerektirmez)
+        # 2. Arbitraj kontrolü (hızlı, AI gerektirmez) + EXECUTE!
         arb_signals = self.arbitrage.detect(markets, self.balance)
         if arb_signals:
-            logger.info(f"🔄 {len(arb_signals)} arbitraj fırsatı bulundu")
+            logger.info(f"🔄 {len(arb_signals)} arbitraj fırsatı bulundu — EXECUTE!")
+            for arb in arb_signals[:3]:  # Max 3 arbitraj
+                try:
+                    # YES tarafını al
+                    if arb.tokens and len(arb.tokens) >= 2:
+                        from src.strategy.mispricing import TradeSignal
+                        arb_signal = TradeSignal(
+                            market_id=arb.market_id, question=arb.question,
+                            category="arbitrage", direction="BUY_YES",
+                            fair_value=0.5, market_price=arb.yes_price,
+                            edge=arb.profit_margin, confidence=0.95,
+                            position_size=arb.position_size / 2,
+                            shares=round((arb.position_size / 2) / arb.yes_price, 1),
+                            price=arb.yes_price, token_side="YES",
+                            reasoning=f"Arbitrage: YES+NO={arb.total_price:.3f}",
+                            kelly_fraction=0.05, tokens=arb.tokens, slug=arb.slug,
+                        )
+                        order = await self.executor.execute_signal(arb_signal)
+                        if order:
+                            token_id = arb.tokens[0] if arb.tokens else ""
+                            self.positions.open_position(order, token_id=token_id)
+                            self.risk.record_trade()
+                            logger.info(f"✅ Arbitraj YES alındı: {arb.question[:40]}")
+                except Exception as e:
+                    logger.warning(f"Arbitraj execute hatası: {e}")
 
         # 3. Nakit kontrolü — yoksa analiz yapma (API tasarrufu!)
         available_cash = self.balance - self.positions.total_exposure
@@ -279,7 +303,8 @@ class PolymarketBot:
             markets_to_analyze = [
                 m for m in markets if not self.positions.has_position(m["id"])
             ]
-            max_analyze = min(50, len(markets_to_analyze))
+            # ⚔️ WARRIOR: Sadece en iyi 10 market (50 değil!)
+            max_analyze = min(10, len(markets_to_analyze))
             markets_to_analyze = markets_to_analyze[:max_analyze]
 
             logger.info(f"🧠 {max_analyze} market {'dual-AI' if self.deepseek.enabled else 'AI'} ile analiz ediliyor...")
@@ -448,6 +473,50 @@ class PolymarketBot:
                     self.perf_tracker.close_trade(
                         market_id, price, closed.realized_pnl
                     )
+
+        # ⚔️ WARRIOR: Stale position exit — 4+ saat, kâr yok → çık
+        import time as time_mod
+        stale_exits = []
+        for market_id, position in self.positions.open_positions.items():
+            if market_id in market_prices:
+                age_hours = (time_mod.time() - position.opened_at) / 3600
+                price = market_prices[market_id]
+                pnl_pct = (price - position.entry_price) / position.entry_price if position.entry_price > 0 else 0
+
+                # 4+ saat ve PnL %-2 ile %+3 arası → stale, çık
+                if age_hours >= 4 and -0.02 <= pnl_pct <= 0.03:
+                    logger.info(
+                        f"⏰ STALE EXIT: {position.question[:35]}... | "
+                        f"Age={age_hours:.1f}h | PnL={pnl_pct:+.1%} → Çıkıyoruz"
+                    )
+                    stale_exits.append({
+                        "market_id": market_id,
+                        "token_id": position.token_id,
+                        "shares": position.shares,
+                        "price": price,
+                        "reason": "STALE_EXIT",
+                    })
+
+        for close_info in stale_exits:
+            market_id = close_info["market_id"]
+            token_id = close_info["token_id"]
+            shares = close_info["shares"]
+            price = close_info["price"]
+
+            if token_id:
+                sell_result = await self.executor.sell_position(token_id, shares, price)
+                if sell_result:
+                    logger.info(f"⏰ STALE SELL başarılı: {sell_result.order_id}")
+                else:
+                    continue
+
+            closed = self.positions.close_position(market_id, price)
+            if closed:
+                self.economics.record_trade_pnl(closed.realized_pnl)
+                self.risk.record_trade(closed.realized_pnl)
+                await self.telegram.notify_trade_closed(closed)
+                if settings.enable_self_learning:
+                    self.perf_tracker.close_trade(market_id, price, closed.realized_pnl)
 
     def shutdown(self, signum=None, frame=None):
         logger.info("🛑 Shutdown sinyali alındı...")
