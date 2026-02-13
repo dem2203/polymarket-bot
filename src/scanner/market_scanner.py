@@ -45,10 +45,10 @@ class MarketScanner:
         self.min_liquidity = settings.min_liquidity
         self.max_markets = settings.max_markets_per_scan
 
-    async def scan_all_markets(self) -> list[dict]:
+    async def scan_all_markets(self, skip_filters: bool = False) -> list[dict]:
         """
-        Tüm aktif marketleri tara, AKILLI filtrele ve SKOR SIRANA göre döndür.
-        AI'a sadece en iyi hedefleri gönder.
+        Tüm aktif marketleri tara.
+        skip_filters=True ise ham listeyi döndür (Sync için gerekli).
         """
         all_markets = []
         offset = 0
@@ -92,6 +92,9 @@ class MarketScanner:
                     break
 
         logger.info(f"📡 Toplam {len(all_markets)} market tarandı")
+
+        if skip_filters:
+            return all_markets
 
         # Filtrele
         filtered = self._apply_filters(all_markets)

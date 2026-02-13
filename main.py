@@ -148,8 +148,8 @@ class PolymarketBot:
                 
                 if api_positions:
                     logger.info(f"⏳ {len(api_positions)} pozisyon için market bilgileri aranıyor...")
-                    # Tüm marketleri çek (başlıkları bulmak için)
-                    all_markets = await self.scanner.scan_all_markets()
+                    # Tüm marketleri çek (başlıkları bulmak için) - V3.3.14: Filtresiz çek!
+                    all_markets = await self.scanner.scan_all_markets(skip_filters=True)
                     
                     # Token ID -> Market haritası çıkar
                     token_map = {}
@@ -344,11 +344,17 @@ class PolymarketBot:
                 except Exception as e:
                     logger.warning(f"Arbitraj execute hatası: {e}")
 
-        # 3. Nakit kontrolü — yoksa analiz yapma (API tasarrufu!)
-        available_cash = self.balance - self.positions.total_exposure
-        if available_cash < 2.0 and not self.positions.open_positions:
+        # 3. Nakit kontrolü
+        # FIXED: total_exposure eski pozisyonları içerebilir, direkt balance kullan
+        # Eğer open positions varsa monitoring update edecek
+        available_cash = self.balance
+        positions_exist = bool(self.positions.open_positions)
+        
+        if available_cash < 2.0 and not positions_exist:
             logger.info(f"💰 Yeterli nakit yok (${available_cash:.2f}), sadece izleme modu")
             return
+        
+        logger.debug(f"💵 Mevcut nakit: ${available_cash:.2f} | Açık pozisyon: {len(self.positions.open_positions)}")
 
         # 4. AI-powered mispricing analizi (dual-AI)
         # Nakit varsa yeni trade ara, yoksa sadece mevcut pozisyonları izle
@@ -480,6 +486,11 @@ class PolymarketBot:
 
     async def _monitor_positions(self):
         """Açık pozisyonları izle — SL/TP + Smart Expiry Exit."""
+        if not self.positions.open_positions:
+            return
+            
+        logger.info(f"👀 Açık pozisyonlar kontrol ediliyor ({len(self.positions.open_positions)})...")
+        
         market_prices = {}
         market_end_dates = {}
 
@@ -490,6 +501,7 @@ class PolymarketBot:
                     market_end_dates[market_id] = None # datetime.now().isoformat()
                     market_prices[market_id] = position.entry_price
                 else:
+                    # Try to get market details from scanner
                     detail = await self.scanner.get_market_details(market_id)
                     if detail:
                         # End date al
@@ -506,8 +518,13 @@ class PolymarketBot:
                                 market_prices[market_id] = float(price_list[0])
                             else:
                                 market_prices[market_id] = float(price_list[1]) if len(price_list) > 1 else 1.0 - float(price_list[0])
+                            logger.debug(f"✅ Fiyat güncellendi: {market_id[:12]}... = ${market_prices[market_id]:.3f}")
+                    else:
+                        # Fallback: Entry price kullan (güncel fiyat bilinmiyor)
+                        logger.warning(f"⚠️ Market detay yok: {market_id[:12]}... - Entry price kullanılıyor")
+                        market_prices[market_id] = position.entry_price
             except Exception as e:
-                logger.debug(f"Fiyat güncelleme hatası {market_id}: {e}")
+                logger.debug(f"Fiyat güncelleme hatası {market_id[:12]}...: {e}")
 
         # Pozisyon durumlarını logla ve Expiry Analizi yap
         expiry_exits = []
@@ -581,6 +598,8 @@ class PolymarketBot:
                     f"Giriş: ${position.entry_price:.3f} → Şimdi: ${price:.3f} | "
                     f"PnL: {pnl_pct:+.1%} | Shares: {position.shares:.1f} {expiry_msg}"
                 )
+            else:
+                logger.warning(f"⚠️ Fiyat bilgisi yok: {position.question[:40]}... (market_id: {market_id[:12]}...)")
 
         to_close = self.positions.check_stop_loss_take_profit(market_prices)
         
