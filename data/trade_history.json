@@ -413,8 +413,31 @@
       "cycle_number": 53,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
+    },
+    {
+      "trade_id": "T-00019",
+      "market_id": "0xbb4d8ad76915a24581ff702643cd2bc7c6d29f452d4598d4b4c2b76832f298bc",
+      "question": "Solana Up or Down on February 13?",
+      "category": "crypto",
+      "direction": "BUY_NO",
+      "entry_price": 0.38,
+      "fair_value_claude": 0.4,
+      "fair_value_deepseek": 0.5,
+      "confidence": 0.65,
+      "position_size": 2.23,
+      "kelly_fraction": 0.06,
+      "edge": 0.17420000000000002,
+      "reasoning": "Solana volatile near-term with mixed signals. Overall crypto market bearish, SOL testing support. Current morning shows slight downward pressure suggesting potential close lower than previous candle. Market seems slightly too optimistic at 0.62 for UP.",
+      "outcome": "OPEN",
+      "exit_price": 0.0,
+      "pnl": 0.0,
+      "opened_at": 1770970029.0639477,
+      "closed_at": 0.0,
+      "cycle_number": 68,
+      "ai_was_correct": false,
+      "edge_accuracy": 0.0
     }
   ],
   "daily_reviews": [],
-  "last_saved": 1770960903.095445
+  "last_saved": 1770970029.0646813
 }
