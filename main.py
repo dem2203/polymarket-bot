@@ -44,6 +44,8 @@ from src.learning.trade_journal import TradeJournal
 from src.learning.github_memory import GitHubMemory
 from src.wallet.approval import check_and_approve
 from src.monitoring.health_monitor import HealthMonitor
+from src.data.fact_checker import FactChecker
+from src.notifications.telegram_commands import TelegramCommandHandler
 
 # Log + data dizinleri
 os.makedirs("logs", exist_ok=True)
@@ -92,7 +94,7 @@ class PolymarketBot:
         self.deepseek = DeepSeekValidator()
         self.scanner = MarketScanner()
         self.kelly = KellySizer()
-        self.strategy = MispricingStrategy(self.brain, self.kelly, self.deepseek)
+        # Strategy created later (needs fact_checker)
         self.arbitrage = ArbitrageStrategy()
         self.executor = TradeExecutor()
         self.positions = PositionTracker()
@@ -108,11 +110,21 @@ class PolymarketBot:
         
         # V3.5: Health & Safety
         self.health_monitor = HealthMonitor(self.telegram)
+        
+        # V3.6: AI Validation & Remote Control
+        self.fact_checker = FactChecker()
+        self.telegram_commands = TelegramCommandHandler(self, self.telegram)
+        
+        # NOW create strategy with fact_checker
+        self.strategy = MispricingStrategy(
+            self.brain, self.kelly, self.deepseek, self.fact_checker
+        )
 
         # Durum
         self.running = True
         self.cycle_count = 0
         self.balance = settings.starting_balance
+        self.start_time = time.time()  # For remote control uptime
 
     async def start(self):
         """Bot'u başlat."""
@@ -769,3 +781,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

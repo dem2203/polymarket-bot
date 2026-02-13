@@ -46,10 +46,12 @@ class MispricingStrategy:
     """AI-powered mispricing tespiti — V3: dual-AI + self-learning."""
 
     def __init__(self, brain: AIBrain, kelly: KellySizer,
-                 deepseek: Optional[DeepSeekValidator] = None):
+                 deepseek: Optional[DeepSeekValidator] = None,
+                 fact_checker = None):  # V3.6: Data validation
         self.brain = brain
         self.kelly = kelly
         self.deepseek = deepseek
+        self.fact_checker = fact_checker  # V3.6
         self.threshold = settings.mispricing_threshold
 
         # Performance context (PerformanceTracker'dan gelir)
@@ -99,6 +101,26 @@ class MispricingStrategy:
         if confidence < 0.45:
             logger.debug(f"⏭️ Düşük güven ({confidence:.0%}) — atlandı: {question}")
             return None
+        
+        # V3.6: DATA VALIDATION (before any trading logic)
+        if self.fact_checker:
+            validation = await self.fact_checker.validate_reasoning(
+                market["question"],
+                ai_result["reasoning"],
+                market
+            )
+            
+            if not validation["valid"]:
+                logger.error(
+                    f"🚨 AI DATA ERROR: {market['question'][:40]}...\n"
+                    f"Warnings: {validation.get('warnings', [])}\n"
+                    f"REJECTING TRADE due to invalid AI assumptions!"
+                )
+                return None  # REJECT - AI using wrong data!
+            
+            # Log successful validation
+            if validation.get("details"):
+                logger.info(f"✅ Data validated: {validation['details']}")
 
         # 2. Ön mispricing kontrolü (DeepSeek'i gereksiz yere çağırmamak için)
         pre_mispricing = self.brain.detect_mispricing(fair_value, yes_price)

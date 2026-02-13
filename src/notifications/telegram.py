@@ -166,3 +166,35 @@ class TelegramNotifier:
         Examples: Health dashboard, activity reports.
         """
         await self.send(message, parse_mode="Markdown")
+
+    # ==================== V3.6: REMOTE CONTROL ====================
+    
+    async def poll_commands(self, command_handler):
+        '''Poll for incoming Telegram commands (simple long polling).'''
+        if not self.enabled:
+            return
+        
+        if not hasattr(self, 'last_update_id'):
+            self.last_update_id = 0
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f'{self.api_url}/getUpdates'
+                params = {'timeout': 10, 'offset': self.last_update_id + 1}
+                
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get('ok'):
+                            for update in data.get('result', []):
+                                self.last_update_id = update['update_id']
+                                if 'message' in update:
+                                    text = update['message'].get('text', '')
+                                    if text.startswith('/'):
+                                        response = await command_handler.handle_command(text)
+                                        await self.send(response)
+        except asyncio.TimeoutError:
+            pass
+        except Exception as e:
+            logger.debug(f'Telegram polling error: {e}')
+
