@@ -155,9 +155,36 @@ class MispricingStrategy:
                     f"⚠️ DeepSeek Azalt: {market['question'][:40]}... | "
                     f"Combined FV={combined_fv:.2f}"
                 )
-            else:
                 # Tam consensus — combined kullan
                 combined_fv = validation["combined_probability"]
+        
+        # V3.7: PRICE ENTRY VALIDATION (Profitability Fix)
+        # Reject trades with negative payoff asymmetry
+        price_to_check = yes_price if direction else (1.0 - yes_price)
+        
+        # Rule 1: Never buy above $0.65 (poor risk/reward)
+        MAX_ENTRY_PRICE = 0.65
+        if price_to_check > MAX_ENTRY_PRICE:
+            logger.warning(
+                f"⛔ V3.7 REJECT: Price too high ({price_to_check:.2f} > {MAX_ENTRY_PRICE:.2f}) | "
+                f"{market['question'][:40]}..."
+            )
+            return None
+        
+        # Rule 2: Ensure positive payoff asymmetry (upside >= downside)
+        upside = 1.0 - price_to_check
+        downside = price_to_check
+        if upside < downside * 0.8:  # Allow some slack but not too bad
+            logger.warning(
+                f"⛔ V3.7 REJECT: Negative asymmetry (upside ${upside:.2f} < downside ${downside:.2f}) | "
+                f"{market['question'][:40]}..."
+            )
+            return None
+        
+        logger.info(
+            f"✅ V3.7 Price OK: Entry=${price_to_check:.2f} | "
+            f"Upside=${upside:.2f} vs Downside=${downside:.2f} | R:R={upside/downside:.2f}:1"
+        )
 
         # 4. Final mispricing tespiti (combined FV ile)
         mispricing = self.brain.detect_mispricing(combined_fv, yes_price)
@@ -189,6 +216,28 @@ class MispricingStrategy:
         # Adaptive multiplier uygula
         original_size = kelly_result["position_size"]
         adjusted_size = original_size * (kelly_multiplier / 0.5)  # 0.5 = default
+        
+        # V3.7: CONFIDENCE BOOST (User Request - Be aggressive on high confidence!)
+        confidence_multiplier = 1.0
+        
+        if consensus and deepseek_fv > 0:  # Dual-AI agreement
+            if confidence >= 0.90:
+                # Ultra-high confidence + dual consensus = 2x position!
+                confidence_multiplier = 2.0
+                logger.info(f"🚀 V3.7 ULTRA BOOST: 2x position (confidence={confidence:.0%}, dual-AI consensus)")
+            elif confidence >= 0.80:
+                # High confidence + dual consensus = 1.5x
+                confidence_multiplier = 1.5
+                logger.info(f"📈 V3.7 HIGH BOOST: 1.5x position (confidence={confidence:.0%}, dual-AI consensus)")
+        elif confidence >= 0.85:  # Single AI but very high confidence
+            confidence_multiplier = 1.3
+            logger.info(f"⬆️ V3.7 SOLO BOOST: 1.3x position (confidence={confidence:.0%}, solo AI)")
+        
+        adjusted_size *= confidence_multiplier
+        
+        # Hard cap: max 20% of capital per trade (even with boost)
+        MAX_POSITION_PCT = 0.20
+        adjusted_size = min(adjusted_size, cash * MAX_POSITION_PCT)
         adjusted_size = min(adjusted_size, cash * settings.max_kelly_fraction)
 
         if adjusted_size < 1.0:
