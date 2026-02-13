@@ -43,6 +43,7 @@ from src.learning.adaptive_kelly import AdaptiveKelly
 from src.learning.trade_journal import TradeJournal
 from src.learning.github_memory import GitHubMemory
 from src.wallet.approval import check_and_approve
+from src.monitoring.health_monitor import HealthMonitor
 
 # Log + data dizinleri
 os.makedirs("logs", exist_ok=True)
@@ -104,6 +105,9 @@ class PolymarketBot:
         self.adaptive_kelly = AdaptiveKelly()
         self.journal = TradeJournal(self.perf_tracker)
         self.github_memory = GitHubMemory()
+        
+        # V3.5: Health & Safety
+        self.health_monitor = HealthMonitor(self.telegram)
 
         # Durum
         self.running = True
@@ -286,6 +290,13 @@ class PolymarketBot:
 
         # Bakiye güncelle
         self.balance = self.executor.get_balance()
+        
+        # V3.5: CRITICAL HEALTH CHECKS
+        # Defensive validation
+        assert self.balance >= 0, f"CRITICAL: Negative balance ${self.balance:.2f} - API error"
+        
+        # Balance sanity check
+        await self.health_monitor.check_balance_sanity(self.balance)
 
         # HAYATTA KALMA kontrolü
         if self.balance <= settings.survival_balance:
@@ -349,6 +360,18 @@ class PolymarketBot:
         # Eğer open positions varsa monitoring update edecek
         available_cash = self.balance
         positions_exist = bool(self.positions.open_positions)
+        
+        # V3.5: Check for NEGATIVE CASH (IMPOSSIBLE)
+        if await self.health_monitor.check_negative_cash(
+            available_cash, 
+            self.balance, 
+            self.positions.total_exposure
+        ):
+            logger.critical("🛑 EMERGENCY STOP: Negative cash detected")
+            return  # Emergency stop
+        
+        # V3.5: Check for idle trading (6+ hours with cash)
+        await self.health_monitor.check_idle_trading(available_cash)
         
         if available_cash < 2.0 and not positions_exist:
             logger.info(f"💰 Yeterli nakit yok (${available_cash:.2f}), sadece izleme modu")
@@ -432,6 +455,9 @@ class PolymarketBot:
                 self.risk.record_trade()
                 await self.telegram.notify_trade_opened(signal)
                 trades_executed += 1
+                
+                # V3.5: Record trade in health monitor
+                self.health_monitor.record_trade()
 
                 # V3: Trade'i kaydet (learning)
                 if settings.enable_self_learning:
@@ -442,8 +468,15 @@ class PolymarketBot:
                     )
 
         # 6. Pozisyon izleme (SL/TP + GERÇEK SATIŞ)
+        market_prices_count = 0
         if self.positions.open_positions:
-            await self._monitor_positions()
+            market_prices_count = await self._monitor_positions()
+            
+            # V3.5: Validate monitoring execution
+            await self.health_monitor.check_monitoring_failure(
+                len(self.positions.open_positions),
+                market_prices_count
+            )
 
         # 6. Döngü raporu
         cycle_time = time.time() - cycle_start
@@ -481,6 +514,14 @@ class PolymarketBot:
             eco_report = self.economics.format_report(self.balance)
             logger.info(f"\n{eco_report}")
             await self.telegram.notify_economics_report(eco_report)
+        
+        # V3.5: Her 6 saatte health dashboard (36 cycle @ 10min)
+        if self.cycle_count % 36 == 0:
+            await self.health_monitor.send_health_dashboard(
+                self.balance,
+                self.positions,
+                self.perf_tracker if settings.enable_self_learning else None
+            )
 
         await self.telegram.notify_scan_report(report)
 
@@ -703,6 +744,9 @@ class PolymarketBot:
 
         for mid in zombies:
             self.positions.close_position(mid, exit_price=0.0, local_only=True)
+        
+        # V3.5: Return number of positions with successfully fetched prices
+        return len(market_prices)
 
 
     def shutdown(self, signum=None, frame=None):

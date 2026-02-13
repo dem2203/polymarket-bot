@@ -49,11 +49,12 @@ class TelegramNotifier:
         github_status = "✅" if settings.github_token and settings.github_repo else "❌"
         
         await self.send(
-            f"⚔️ <b>WARRIOR BOT V3.2 BAŞLADI</b>\n\n"
+            f"⚔️ <b>WARRIOR BOT V3.5 BAŞLADI</b>\n\n"
             f"Mod: {mode}\n"
             f"Bakiye: <b>${balance:.2f}</b>\n"
             f"AI: {settings.ai_model}\n"
             f"GitHub Memory: {github_status}\n"
+            f"🛡️ Health Monitor: ✅\n"
             f"Tarama: {settings.scan_interval}s ({settings.scan_interval // 60} dk)\n"
             f"Mispricing: >{settings.mispricing_threshold:.0%} (Warrior)\n"
             f"Kelly: {settings.kelly_multiplier}x (Max %{settings.max_kelly_fraction*100:.0f})\n"
@@ -130,3 +131,38 @@ class TelegramNotifier:
     async def notify_error(self, error: str):
         """Hata bildirimi."""
         await self.send(f"⚠️ <b>HATA</b>\n\n<code>{error[:500]}</code>")
+
+    # ==================== V3.5: HEALTH & SAFETY ALERTS ====================
+    
+    async def send_critical_alert(self, title: str, message: str):
+        """
+        CRITICAL alert - Emergency situations requiring immediate attention.
+        
+        Examples: Negative cash, monitoring failures, balance sanity failures.
+        """
+        alert_message = (
+            f"🚨🚨🚨 <b>{title}</b> 🚨🚨🚨\n\n"
+            f"{message}\n\n"
+            f"⚠️ This is a CRITICAL alert requiring immediate attention."
+        )
+        await self.send(alert_message)
+        
+    async def send_warning_alert(self, title: str, message: str):
+        """
+        WARNING alert - Degraded functionality or suspicious activity.
+        
+        Examples: Idle trading, degraded monitoring, unexpected patterns.
+        """
+        alert_message = (
+            f"⚠️ <b>{title}</b>\n\n"
+            f"{message}"
+        )
+        await self.send(alert_message)
+        
+    async def send_message(self, message: str):
+        """
+        Generic message - Info, dashboards, regular updates.
+        
+        Examples: Health dashboard, activity reports.
+        """
+        await self.send(message, parse_mode="Markdown")
