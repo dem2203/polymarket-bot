@@ -32,6 +32,14 @@ class CryptoValidator(BaseValidator):
         "solana": "solana",
         "sol": "solana",
     }
+
+    # Sanity checks to distinguish asset price from option price ($0.50)
+    # Min/Max reasonable prices
+    PRICE_LIMITS = {
+        "bitcoin": (10_000, 500_000),
+        "ethereum": (500, 50_000),
+        "solana": (5, 5_000),
+    }
     
     def __init__(self):
         # 10 minute cache for crypto (prices don't change that fast for our purposes)
@@ -71,47 +79,41 @@ class CryptoValidator(BaseValidator):
                             logger.info(f"✅ {crypto_id.upper()} price: ${price:,.2f}")
                             return price
         except Exception as e:
-            logger.warning(f"CoinGecko API error for {crypto_id}: {e}")
+            # logger.warning(f"CoinGecko API error for {crypto_id}: {e}")
+            pass
         
         return None
     
-    def _extract_price_from_text(self, text: str) -> Optional[float]:
+    def _extract_price_from_text(self, text: str, crypto_id: str = None) -> Optional[float]:
         """
-        Extract price from AI reasoning.
-        
-        Patterns matched:
-        - $52,000
-        - $52000
-        - 52k
-        - 52K
-        - around $50,000
+        Extract price from AI reasoning, respecting asset limits.
         """
         patterns = [
-            r'\$[\d,]+(?:\.\d{2})?',  # $52,000 or $52,000.00
-            r'([\d,]+)k',              # 52k (thousands)
-            r'([\d,]+)',               # Plain numbers (last resort)
+            r'\$([\d,]+(?:\.\d{2})?)',  # $52,000 or $52,000.00
+            r'([\d,]+)k',              # 52k
+            r'([\d,]{4,})',            # Numbers with at least 4 digits (to avoid finding "42")
         ]
         
+        min_price, max_price = 0, 1_000_000_000
+        if crypto_id and crypto_id in self.PRICE_LIMITS:
+            min_price, max_price = self.PRICE_LIMITS[crypto_id]
+
         for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
+            matches = re.finditer(pattern, text, re.IGNORECASE)
             for match in matches:
                 try:
-                    # Clean and parse
-                    if isinstance(match, tuple):
-                        match = match[0] if match[0] else match[1]
+                    val_str = match.group(1).replace(',', '')
+                    price = float(val_str)
                     
-                    price_str = str(match).replace('$', '').replace(',', '')
-                    
-                    # Handle 'k' suffix
-                    if 'k' in text[text.find(price_str):text.find(price_str)+10].lower():
-                        price = float(price_str) * 1000
-                    else:
-                        price = float(price_str)
-                    
-                    # Sanity check (reasonable crypto price range)
-                    if 0.01 < price < 1_000_000:
+                    # Handle 'k'
+                    if match.group(0).lower().endswith('k'):
+                        price *= 1000
+                        
+                    # Sanity Check
+                    if min_price <= price <= max_price:
                         return price
-                except (ValueError, AttributeError):
+                        
+                except (ValueError, IndexError):
                     continue
         
         return None
@@ -150,11 +152,12 @@ class CryptoValidator(BaseValidator):
         if not crypto_id:
             return {"valid": True, "confidence": 1.0, "warning": None, "details": {}}
         
-        # 2. Extract AI's price assumption
-        ai_price = self._extract_price_from_text(reasoning)
+        # 2. Extract AI's price assumption (with sanity checks)
+        ai_price = self._extract_price_from_text(reasoning, crypto_id)
         if not ai_price:
-            # Crypto mentioned but no price in reasoning → allow (can't validate)
-            logger.debug(f"Crypto '{crypto_id}' mentioned but no price in reasoning")
+            # Crypto mentioned but no valid price in reasoning → allow
+            # (Matches might have been filtered out by sanity checks)
+            logger.debug(f"Crypto '{crypto_id}' mentioned but no valid price extracted")
             return {"valid": True, "confidence": 0.8, "warning": None, "details": {}}
         
         # 3. Get actual price
