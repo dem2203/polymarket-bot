@@ -827,8 +827,31 @@
       "cycle_number": 2,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
+    },
+    {
+      "trade_id": "T-00037",
+      "market_id": "0x98900867a0498637b6ec9052bcaff819bc2d221a3ad8932f5ccb6f7cf3e1dc7b",
+      "question": "Bitcoin Up or Down on February 14?",
+      "category": "crypto",
+      "direction": "BUY_NO",
+      "entry_price": 0.07499999999999996,
+      "fair_value_claude": 0.45,
+      "fair_value_deepseek": 0.5,
+      "confidence": 0.6,
+      "position_size": 1.14,
+      "kelly_fraction": 0.0404,
+      "edge": 0.47500000000000003,
+      "reasoning": "Near resolution, high volatility. Market currently priced bullishly at 0.93 for UP. Bitcoin hovering around critical psychological levels. No clear directional momentum in last 24h. Small chance of late price movement before market close.",
+      "outcome": "OPEN",
+      "exit_price": 0.0,
+      "pnl": 0.0,
+      "opened_at": 1771074749.945578,
+      "closed_at": 0.0,
+      "cycle_number": 14,
+      "ai_was_correct": false,
+      "edge_accuracy": 0.0
     }
   ],
   "daily_reviews": [],
-  "last_saved": 1771067042.1014798
+  "last_saved": 1771074749.9461417
 }
