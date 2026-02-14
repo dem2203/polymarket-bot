@@ -154,6 +154,13 @@ class MarketScanner:
                 # Bitiş zamanı hesapla
                 hours_to_expiry = self._hours_to_expiry(m)
 
+                # V4.0: Hız Limiti (Max Duration)
+                # Eğer vade çok uzunsa (örn. >60 gün), direkt ele.
+                max_hours = settings.max_days_to_expiry * 24
+                if hours_to_expiry > max_hours:
+                    # logger.debug(f"⏳ Market çok uzak vadeli: {hours_to_expiry/24:.1f} gün")
+                    continue
+
                 filtered.append({
                     "id": m.get("conditionId", m.get("id", "")),
                     "question": m.get("question", ""),
@@ -235,15 +242,17 @@ class MarketScanner:
             hours = m.get("hours_to_expiry", 9999)
 
             # 1. TIME SCORE — yakın biten eventler çok değerli
-            if 0 < hours <= 6:
-                score += 40  # Çok yakın — en büyük edge
-            elif 6 < hours <= 24:
-                score += 30  # 1 gün içinde
+            if 0 < hours <= 24:
+                score += 50  # 24h: ULTRA VELOCITY (Anında döngü) 🚀
             elif 24 < hours <= 72:
-                score += 20  # 3 gün içinde
+                score += 40  # 3 gün: Yüksek Hız
             elif 72 < hours <= 168:
-                score += 10  # 1 hafta içinde
-            # 168+ saat → 0 puan
+                score += 25  # 1 hafta: İdeal
+            elif 168 < hours <= 720: # 30 gün
+                score += 10  # Orta vade
+            elif hours > 1080: # 45 gün+
+                score -= 20  # Ceza: Para bağlanmasın (sadece çok iyi fiyat varsa girer)
+
 
             # 2. PRICE SCORE — sweet spot fiyatlar (büyük hareket potansiyeli)
             if 0.15 <= yes_price <= 0.35 or 0.65 <= yes_price <= 0.85:

@@ -48,8 +48,9 @@ class Settings(BaseSettings):
 
     # ---- Risk ----
     mispricing_threshold: float = 0.05     # >%5 fark = trade (WARRIOR: daha fazla fırsat)
-    stop_loss_pct: float = 0.15            # WARRIOR: sıkı stop-loss (%20 → %15)
-    take_profit_pct: float = 0.25
+    stop_loss_pct: float = 0.15            # %15 Stop Loss
+    take_profit_pct: float = 0.40          # %40 Take Profit
+    max_days_to_expiry: int = 60           # V4.0: Maksimum vade (Gün). 60 günden uzun ise GİRME.
     daily_loss_limit: float = 25.0
     survival_balance: float = 5.0
     max_total_exposure: float = 100.0
