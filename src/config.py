@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     stop_loss_pct: float = 0.15            # %15 Stop Loss
     take_profit_pct: float = 0.40          # %40 Take Profit
     max_days_to_expiry: int = 60           # V4.0: Maksimum vade (Gün). 60 günden uzun ise GİRME.
+    stagnation_days: int = 7               # V4.1: Durgunluk Limiti (Gün). 7 gün boyunca...
+    stagnation_threshold: float = 0.03     # ...%3'ten az hareket ederse SAT.
     daily_loss_limit: float = 25.0
     survival_balance: float = 5.0
     max_total_exposure: float = 100.0

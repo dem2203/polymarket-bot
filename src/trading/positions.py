@@ -238,6 +238,29 @@ class PositionTracker:
                     "price": new_price,
                     "reason": "TAKE_PROFIT",
                 })
+                continue
+
+            # V4.1: STAGNATION KILLER (Durgunluk Temizliği)
+            # Eğer >7 gün elde tutulmuş ve PnL %3'ten az oynamışsa -> SAT
+            # (Opened_at 0 ise işlem yapma, yeni sync olmuş olabilir)
+            if position.opened_at > 0:
+                hours_held = (time.time() - position.opened_at) / 3600
+                if hours_held > (settings.stagnation_days * 24):
+                    # Fiyat hareketi çok azsa (Ölü Para)
+                    # Not: Bunu realized PnL değil, mutlak PnL değişimi olarak düşünmek lazım.
+                    # Basitçe: Eğer hala zarardaysa veya çok az kârdaysa (%3 altı)
+                    if position.pnl_pct < settings.stagnation_threshold: 
+                        logger.warning(
+                            f"🩸 STAGNATION KILLER tetiklendi: {position.question[:40]}... "
+                            f"| Süre: {hours_held/24:.1f} gün | PnL={position.pnl_pct:.1%}"
+                        )
+                        to_close.append({
+                            "market_id": market_id,
+                            "token_id": position.token_id,
+                            "shares": position.shares,
+                            "price": new_price,
+                            "reason": f"STAGNATION (> {settings.stagnation_days}d)",
+                        })
 
         return to_close
 
