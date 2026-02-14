@@ -149,6 +149,9 @@ class TradeExecutor:
             self._order_counter += 1
             order_id = response.get("orderID", f"LIVE-{self._order_counter:04d}")
 
+            # 5. Order Created — Construct ExecutedOrder record
+            # Use the ACTUAL adjusted values (new_size, new_shares) not the signal values
+            # This prevents PnL mismatch (e.g. paying for 5 shares but recording only 4)
             order = ExecutedOrder(
                 order_id=order_id,
                 market_id=signal.market_id,
@@ -156,8 +159,8 @@ class TradeExecutor:
                 side="BUY",
                 token_side=signal.token_side,
                 price=signal.price,
-                size=signal.position_size,
-                shares=signal.shares,
+                size=new_size,        # Adjusted size ($)
+                shares=new_shares,    # Adjusted shares count
                 status="PENDING",
                 timestamp=time.time(),
                 is_simulated=False,
@@ -166,8 +169,8 @@ class TradeExecutor:
             self.executed_orders.append(order)
             logger.info(
                 f"🟢 [LIVE] Emir gönderildi: {order_id} | "
-                f"{signal.token_side} {signal.shares:.1f} shares @ ${signal.price:.3f} "
-                f"(${signal.position_size:.2f})"
+                f"{signal.token_side} {new_shares:.1f} shares @ ${signal.price:.3f} "
+                f"(${new_size:.2f})"
             )
             return order
 
