@@ -158,9 +158,18 @@ class MispricingStrategy:
                 # Tam consensus — combined kullan
                 combined_fv = validation["combined_probability"]
         
+        # 4. Final mispricing tespiti (combined FV ile)
+        mispricing = self.brain.detect_mispricing(combined_fv, yes_price)
+
+        if not mispricing["has_edge"]:
+            return None
+
+        direction = mispricing["direction"]
+        edge = mispricing["edge"]
+
         # V3.7: PRICE ENTRY VALIDATION (Profitability Fix)
         # Reject trades with negative payoff asymmetry
-        price_to_check = yes_price if direction else (1.0 - yes_price)
+        price_to_check = yes_price if direction == "YES" else (1.0 - yes_price)
         
         # Rule 1: Never buy above $0.65 (poor risk/reward)
         MAX_ENTRY_PRICE = 0.65
@@ -185,15 +194,6 @@ class MispricingStrategy:
             f"✅ V3.7 Price OK: Entry=${price_to_check:.2f} | "
             f"Upside=${upside:.2f} vs Downside=${downside:.2f} | R:R={upside/downside:.2f}:1"
         )
-
-        # 4. Final mispricing tespiti (combined FV ile)
-        mispricing = self.brain.detect_mispricing(combined_fv, yes_price)
-
-        if not mispricing["has_edge"]:
-            return None
-
-        direction = mispricing["direction"]
-        edge = mispricing["edge"]
 
         logger.info(
             f"🎯 {'🤝Dual' if deepseek_fv > 0 else '🧠Solo'} Mispricing: "
