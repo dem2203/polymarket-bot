@@ -773,11 +773,11 @@
       "kelly_fraction": 0.0235,
       "edge": 0.555,
       "reasoning": "SOL showing bearish momentum pre-noon ET - market likely overconfident in upside. Current crypto weakness, potential profit-taking after recent rally suggests downward price movement more probable than 0.08 current pricing implies.",
-      "outcome": "OPEN",
-      "exit_price": 0.0,
+      "outcome": "LOSS",
+      "exit_price": 0.08499999999999996,
       "pnl": 0.0,
       "opened_at": 1771066392.530153,
-      "closed_at": 0.0,
+      "closed_at": 1771081183.5396676,
       "cycle_number": 1,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
@@ -853,5 +853,5 @@
     }
   ],
   "daily_reviews": [],
-  "last_saved": 1771074749.9461417
+  "last_saved": 1771081183.5401726
 }
