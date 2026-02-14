@@ -124,34 +124,71 @@ class TradeExecutor:
         return order
 
     async def _place_real_order(self, signal: TradeSignal) -> Optional[ExecutedOrder]:
-        """Gerçek limit emir gönder."""
+        """Gerçek emir gönder (Canlı)."""
         if not self.client:
-            logger.error("❌ CLOB client hazır değil — emir gönderilemedi")
+            logger.error("❌ CLOB client başlatılamadı.")
             return None
 
-        try:
-            # Token ID al
-            token_id = self._get_token_id(signal)
-            if not token_id:
-                logger.error(f"Token ID bulunamadı: {signal.market_id}")
-                return None
+        # 1. Token ID Verification
+        token_id = signal.token_id or self._get_token_id(signal)
+        if not token_id:
+            logger.error(f"❌ Token ID bulunamadı: {signal.question}")
+            return None
 
-            # Limit order oluştur
+        # 2. Get Minimum Tick Size (Validation)
+        try:
+            tick_size_str = self.client.get_tick_size(token_id)
+            min_tick = float(tick_size_str) if tick_size_str else 0.0
+        except Exception as e:
+            logger.warning(f"Tick size alınamadı ({e}), varsayılan 1 kullanılıyor.")
+            min_tick = 1.0
+
+        # Varsayılan değerler (Sinyalden gelen)
+        current_shares = signal.shares
+        current_size = signal.position_size
+
+        # 3. Min Lot Size Check & Adjustment
+        # Polymarket bazen "Size lower than minimum: 5" hatası veriyor.
+        # Bu durumda miktarı otomatik olarak minimuma tamamlayacağız.
+        MIN_ORDER_SIZE_USD = 5.0 # Güvenli eşik
+        
+        # Eğer hesaplanan miktar $5'in altındaysa ve bakiye yetiyorsa -> $5'e tamamla
+        if current_size < MIN_ORDER_SIZE_USD:
+            # Bakiyeyi kontrol et
+            balance = self.get_balance()
+            if balance > MIN_ORDER_SIZE_USD:
+                logger.info(f"⚖️ Min lot ayarı: {current_shares:.1f} -> {MIN_ORDER_SIZE_USD / signal.price:.1f} lot (${current_size:.2f} -> ${MIN_ORDER_SIZE_USD:.2f})")
+                current_size = MIN_ORDER_SIZE_USD
+                current_shares = current_size / signal.price
+            else:
+                 logger.warning(f"⚠️ Min lot ($5) için bakiye yetersiz: ${balance:.2f}")
+                 # Yine de denesin, belki limit $1'dir.
+        
+        try:
+            # 4. Create Order
+            # Round shares to avoid precision errors (e.g. 4.999999)
+            # Polymarket genellikle tam sayıya yakın ister ama 0.1 de olabilir.
+            # Güvenli olması için 1 ondalık basamak kullanalım.
+            if min_tick >= 1:
+                current_shares = round(current_shares) # Tam sayı
+            
             order_args = OrderArgs(
                 price=round(signal.price, 2),
-                size=round(signal.shares, 2),
+                size=round(current_shares, 2), # Shares miktarını gönderiyoruz!
                 side=BUY,
                 token_id=token_id,
             )
 
             response = self.client.create_and_post_order(order_args)
-
+            
             self._order_counter += 1
             order_id = response.get("orderID", f"LIVE-{self._order_counter:04d}")
 
             # 5. Order Created — Construct ExecutedOrder record
-            # Use the ACTUAL adjusted values (new_size, new_shares) not the signal values
-            # This prevents PnL mismatch (e.g. paying for 5 shares but recording only 4)
+            # Use the ACTUAL shares/size sent to the API
+            final_shares = round(current_shares, 2)
+            final_size = final_shares * signal.price
+
             order = ExecutedOrder(
                 order_id=order_id,
                 market_id=signal.market_id,
@@ -159,8 +196,8 @@ class TradeExecutor:
                 side="BUY",
                 token_side=signal.token_side,
                 price=signal.price,
-                size=new_size,        # Adjusted size ($)
-                shares=new_shares,    # Adjusted shares count
+                size=final_size,      # Adjusted actual size ($)
+                shares=final_shares,  # Adjusted actual shares
                 status="PENDING",
                 timestamp=time.time(),
                 is_simulated=False,
@@ -169,13 +206,18 @@ class TradeExecutor:
             self.executed_orders.append(order)
             logger.info(
                 f"🟢 [LIVE] Emir gönderildi: {order_id} | "
-                f"{signal.token_side} {new_shares:.1f} shares @ ${signal.price:.3f} "
-                f"(${new_size:.2f})"
+                f"{signal.token_side} {final_shares:.1f} shares @ ${signal.price:.3f} "
+                f"(${final_size:.2f})"
             )
             return order
 
         except Exception as e:
-            logger.error(f"❌ Emir gönderme hatası: {e}")
+            error_msg = str(e)
+            # Eğer hata "Size lower than minimum" ise ve biz düzeltemediysek:
+            if "lower than the minimum" in error_msg:
+                 logger.error(f"❌ Emir reddedildi (Limit Altı): {current_size:.2f} < Min")
+            else:
+                 logger.error(f"❌ Emir gönderme hatası: {e}")
             return None
 
     def _get_token_id(self, signal: TradeSignal) -> Optional[str]:
