@@ -875,6 +875,27 @@
       "edge_accuracy": 0.0
     }
   ],
-  "daily_reviews": [],
-  "last_saved": 1771096568.8708465
+  "daily_reviews": [
+    {
+      "performance_grade": "F",
+      "lesson": "Overconfidence without adaptability leads to systematic losses. Market conditions evolve rapidly, requiring constant re-evaluation of predictive models.",
+      "strong_categories": [],
+      "weak_categories": [
+        "crypto"
+      ],
+      "edge_calibration": "too_aggressive",
+      "recommended_actions": [
+        "Reduce trade frequency",
+        "Implement stricter entry criteria",
+        "Add more dynamic market sentiment analysis",
+        "Implement tighter stop-loss mechanisms"
+      ],
+      "confidence_adjustment": "decrease",
+      "risk_adjustment": "decrease_position_sizes",
+      "reviewed_at": 1771096575.3038762,
+      "trades_reviewed": 19,
+      "timestamp": 1771096575.303885
+    }
+  ],
+  "last_saved": 1771096575.3044991
 }
