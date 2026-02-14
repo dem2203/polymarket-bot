@@ -850,8 +850,31 @@
       "cycle_number": 14,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
+    },
+    {
+      "trade_id": "T-00038",
+      "market_id": "0x50da3dd3b54c44d4e4ae3c9f4f0d7b78dd69583b56e7a0c099977039fe1b886c",
+      "question": "Ethereum Up or Down on February 15?",
+      "category": "crypto",
+      "direction": "BUY_NO",
+      "entry_price": 0.495,
+      "fair_value_claude": 0.42,
+      "fair_value_deepseek": 0.5,
+      "confidence": 0.65,
+      "position_size": 2.475,
+      "kelly_fraction": 0.0321,
+      "edge": 0.08500000000000002,
+      "reasoning": "Crypto price movement is highly volatile. Currently ETH trading at ~$2,300. Recent market sentiment slightly bearish but no definitive short-term catalyst. Market pricing suggests near 50/50, but small lean towards potential downside. Key watch: Bitcoin market sentiment, upcoming ETH options expiry, potential macro economic news that could impact crypto. No strong signal to make an ultra-confident call.",
+      "outcome": "OPEN",
+      "exit_price": 0.0,
+      "pnl": 0.0,
+      "opened_at": 1771081831.7922068,
+      "closed_at": 0.0,
+      "cycle_number": 25,
+      "ai_was_correct": false,
+      "edge_accuracy": 0.0
     }
   ],
   "daily_reviews": [],
-  "last_saved": 1771081183.5401726
+  "last_saved": 1771081831.7927527
 }
