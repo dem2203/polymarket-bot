@@ -272,3 +272,60 @@ class PerformanceTracker:
         cutoff = time.time() - (hours * 3600)
         recent = [t for t in self.trades if t.opened_at > cutoff]
         return [asdict(t) for t in recent]
+
+    def get_daily_pnl_report(self) -> dict:
+        """
+        V3.8: Günlük P&L Raporu (Compound Growth Tracking).
+        Bugünkü işlemleri ve performansı özetler.
+        """
+        from datetime import datetime, timezone
+        
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        
+        # Bugün kapanan veya açılan trade'leri bul
+        # Not: Basitlik için kapanış zamanına göre bakalım
+        trades_today = []
+        for t in self.trades:
+            if t.outcome in ["WIN", "LOSS"]:
+                # Kapanış zamanı bugün mü?
+                if t.closed_at > 0:
+                    dt = datetime.fromtimestamp(t.closed_at, timezone.utc)
+                    if dt.strftime("%Y-%m-%d") == today_str:
+                        trades_today.append(t)
+        
+        if not trades_today:
+            return {
+                "date": today_str,
+                "total_pnl": 0.0,
+                "num_trades": 0,
+                "wins": 0,
+                "losses": 0,
+                "win_rate": 0.0,
+                "best_win": 0.0,
+                "worst_loss": 0.0,
+                "categories": {}
+            }
+            
+        wins = [t for t in trades_today if t.outcome == "WIN"]
+        losses = [t for t in trades_today if t.outcome == "LOSS"]
+        total_pnl = sum(t.pnl for t in trades_today)
+        win_rate = len(wins) / len(trades_today)
+        
+        # Kategori bazlı
+        categories = defaultdict(float)
+        for t in trades_today:
+            cat = t.category or "general"
+            categories[cat] += t.pnl
+            
+        return {
+            "date": today_str,
+            "total_pnl": round(total_pnl, 2),
+            "num_trades": len(trades_today),
+            "wins": len(wins),
+            "losses": len(losses),
+            "win_rate": round(win_rate, 2),
+            "best_win": round(max([t.pnl for t in trades_today], default=0), 2),
+            "worst_loss": round(min([t.pnl for t in trades_today], default=0), 2),
+            "categories": dict(categories)
+        }

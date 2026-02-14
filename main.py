@@ -438,7 +438,15 @@ class PolymarketBot:
         # 5. Her sinyal için risk kontrolü ve emir yürütme
         trades_executed = 0
 
+        # V3.8: GLOBAL POSITION LIMIT (Compound Growth Protection)
+        # Max 5 concurrent positions to prevent over-exposure
+        MAX_CONCURRENT_POSITIONS = 5
+        
         for signal in signals:
+            if len(self.positions.open_positions) >= MAX_CONCURRENT_POSITIONS:
+                logger.info(f"⏸️ Max pozisyon limitine ({MAX_CONCURRENT_POSITIONS}) ulaşıldı - yeni trade atlandı")
+                break
+
             if trades_executed >= 5:
                 logger.info("⚠️ Döngü başına max 5 trade limitine ulaşıldı.")
                 break
@@ -528,12 +536,23 @@ class PolymarketBot:
             await self.telegram.notify_economics_report(eco_report)
         
         # V3.5: Her 6 saatte health dashboard (36 cycle @ 10min)
-        if self.cycle_count % 36 == 0:
             await self.health_monitor.send_health_dashboard(
                 self.balance,
                 self.positions,
                 self.perf_tracker if settings.enable_self_learning else None
             )
+            
+        # V3.8: Günlük P&L Raporu (Her 4 saatte bir, gün içi durum)
+        if self.cycle_count % 48 == 0 and settings.enable_self_learning:
+            daily_report = self.perf_tracker.get_daily_pnl_report()
+            if daily_report["num_trades"] > 0:
+                pnl_msg = (
+                    f"📅 **GÜNLÜK P&L RAPORU** ({daily_report['date']})\n"
+                    f"💰 PnL: ${daily_report['total_pnl']:+.2f}\n"
+                    f"📊 Win Rate: {daily_report['win_rate']:.0%} ({daily_report['wins']}W / {daily_report['losses']}L)\n"
+                    f"🏆 Best: ${daily_report['best_win']:+.2f} | 💀 Worst: ${daily_report['worst_loss']:+.2f}"
+                )
+                await self.telegram.send(pnl_msg)
 
         await self.telegram.notify_scan_report(report)
 
