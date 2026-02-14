@@ -126,6 +126,79 @@ class PolymarketBot:
         self.balance = settings.starting_balance
         self.start_time = time.time()  # For remote control uptime
 
+    async def sync_positions_on_startup(self):
+        """
+        V3.9: Startup Sync (Persistence & Recovery)
+        Bot başladığında chain üzerindeki açık pozisyonları çeker ve hafızaya alır.
+        Böylece restart sonrası "Zombie Position" sorunu çözülür.
+        """
+        logger.info("🔄 V3.9: Startup Position Sync başlatılıyor...")
+        
+        # 1. Chain'den pozisyonları çek (Dry Run olsa bile zorla)
+        try:
+            api_positions = await self.executor.get_open_positions(force_update=True)
+            if not api_positions:
+                logger.info("✅ Chain üzerinde açık pozisyon bulunamadı (Temiz başlangıç).")
+                return
+        except Exception as e:
+            logger.error(f"❌ Position fetch failed during sync: {e}")
+            return
+
+        logger.info(f"📥 Chain'den {len(api_positions)} ham pozisyon alındı. Market verisi aranıyor...")
+
+        # 2. Tüm marketleri tara (Token ID -> Market ID eşleşmesi için)
+        try:
+            all_markets = await self.scanner.scan_all_markets(skip_filters=True)
+            token_map = self.scanner.get_market_from_token_map(all_markets)
+        except Exception as e:
+            logger.error(f"❌ Market scan failed during sync: {e}")
+            return
+
+        # 3. Pozisyonları eşleştir ve hafızaya al
+        synced_count = 0
+        for p in api_positions:
+            try:
+                tid = p.get("asset_id")
+                size = float(p.get("size", 0))
+                
+                if size <= 0:
+                    continue
+
+                if tid in token_map:
+                    m = token_map[tid]
+                    market_id = m["market_id"]
+                    question = m["question"]
+                    token_side = m["token_side"]
+                    
+                    # Avg Price (Executor'dan gelir, yoksa tahmini)
+                    entry_price = float(p.get("avgPrice", 0)) 
+                    if entry_price <= 0:
+                         # Fallback: Eğer avgPrice yoksa (Raw trade history lazım), 
+                         # Şimdilik güvenli bir varsayılan veya logla geç.
+                         # Executor _derive_positions_from_trades ile avgPrice üretiyor.
+                         entry_price = 0.50 # BİLİNMİYOR
+                         logger.warning(f"⚠️ Entry price bilinmiyor: {question[:30]}... (0.50 varsayıldı)")
+
+                    self.positions.add_remote_position(
+                        market_id=market_id,
+                        question=question,
+                        token_side=token_side,
+                        shares=size,
+                        entry_price=entry_price,
+                        token_id=tid
+                    )
+                    synced_count += 1
+                else:
+                    logger.warning(f"⚠️ Bilinmeyen Token ID: {tid} (Market bulunamadı)")
+            except Exception as e:
+                logger.error(f"❌ Error syncing position {p}: {e}")
+
+        if synced_count > 0:
+            logger.info(f"✅ TOPLAM {synced_count} Pozisyon Başarıyla Kurtarıldı ve Takibe Alındı! 🚀")
+            # Hemen bir kontrol döngüsü tetiklemek için beklenebilir ama main loop halleder.
+        else:
+            logger.warning("⚠️ Pozisyonlar çekildi ama marketlerle eşleşmedi (Gamma API gecikmesi olabilir).")
+
     async def start(self):
         """Bot'u başlat."""
         logger.info("=" * 60)
@@ -156,60 +229,18 @@ class PolymarketBot:
             await self.telegram.send("❌ ANTHROPIC_API_KEY yok! Bot duruyor.")
             return
 
-        # 🔄 PORTFOLIO SYNC (API'den Pozisyonları Kurtar)
+        # 🔄 PORTFOLIO SYNC (API'den Pozisyonları Kurtar) (V3.9)
         if settings.has_polymarket_key:
-            try:
-                logger.info("🌊 Portfolyo senkronizasyonu başlıyor...")
-                api_positions = await self.executor.get_open_positions()
-                
-                if api_positions:
-                    logger.info(f"⏳ {len(api_positions)} pozisyon için market bilgileri aranıyor...")
-                    # Tüm marketleri çek (başlıkları bulmak için) - V3.3.14: Filtresiz çek!
-                    all_markets = await self.scanner.scan_all_markets(skip_filters=True)
-                    
-                    # Token ID -> Market haritası çıkar
-                    token_map = {}
-                    for m in all_markets:
-                        for t in m.get("tokens", []):
-                            token_map[t["token_id"]] = m
-                    
-                    # Eşleştir ve ekle
-                    synced_count = 0
-                    for p in api_positions:
-                        tid = p.get("asset_id")
-                        size = float(p.get("size", 0))
-                        
-                        if size > 0 and tid in token_map:
-                            m = token_map[tid]
-                            # Tarafı bul (Token ID karşılaştır)
-                            side = "UNKNOWN"
-                            tokens = m.get("tokens", [])
-                            if tokens and len(tokens) >= 2:
-                                if tid == tokens[0]["token_id"]:
-                                    side = "YES" # Genellikle 0=YES
-                                elif tid == tokens[1]["token_id"]:
-                                    side = "NO"
-                            
-                            # Pozisyonu ekle
-                            self.positions.add_remote_position(
-                                market_id=m["id"],
-                                question=m["question"],
-                                token_side=side,
-                                shares=size,
-                                entry_price=float(p.get("avg_price", 0)),
-                                token_id=tid
-                            )
-                            synced_count += 1
-                    
-                    logger.info(f"✅ {synced_count}/{len(api_positions)} pozisyon kurtarıldı ve eşleştirildi.")
-                else:
-                    logger.info("ℹ️ API'de açık pozisyon bulunamadı.")
-            except Exception as e:
-                logger.error(f"❌ Portfolyo sync hatası: {e}")
+            await self.sync_positions_on_startup()
+        
+        # Ana döngü
+        logger.info("🚀 Döngü başlıyor...")
+        cycle_start_time = time.time()
 
         # AI Health Check
         logger.info("AI Health Check...")
         health = self.brain.health_check()
+        
         if health["ok"]:
             logger.info(f"✅ AI hazır: {health['model']}")
         else:

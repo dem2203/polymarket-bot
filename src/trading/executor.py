@@ -325,7 +325,7 @@ class TradeExecutor:
 
 
 
-    async def get_open_positions(self) -> list[dict]:
+    async def get_open_positions(self, force_update: bool = False) -> list[dict]:
         """
         Polymarket API'den açık pozisyonları getir.
         Fallback Zinciri:
@@ -333,8 +333,8 @@ class TradeExecutor:
         2. GET /data/positions (Raw)
         3. GET /data/trades (Raw) -> Reconstruct (Son çare)
         """
-        if self.dry_run or not self.client:
-            logger.info("⏸️ DRY RUN veya Client yok, pozisyon senkronizasyonu atlandı.")
+        if (self.dry_run and not force_update) or not self.client:
+            # logger.info("⏸️ DRY RUN veya Client yok, pozisyon senkronizasyonu atlandı.")
             return []
 
         # 1. Try Library Method (If available in future)

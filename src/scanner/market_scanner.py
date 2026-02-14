@@ -176,6 +176,48 @@ class MarketScanner:
 
         return filtered
 
+
+    def get_market_from_token_map(self, markets: list[dict]) -> dict:
+        """
+        Token ID -> Market bilgilerini eşleyen bir harita oluştur.
+        Startup Sync için kullanılır.
+        """
+        token_map = {}
+        for m in markets:
+            # Extract Token IDs
+            tokens = m.get("clobTokenIds", m.get("tokens", []))
+            
+            if isinstance(tokens, str):
+                try:
+                    tokens = json.loads(tokens)
+                except:
+                    tokens = tokens.split(",")
+            
+            if not tokens:
+                continue
+                
+            # Clean tokens
+            tokens = [str(t).strip().replace('"', '').replace("'", "") for t in tokens]
+            
+            # Map YES (0) and NO (1) tokens
+            if len(tokens) > 0:
+                token_map[tokens[0]] = {
+                    "market_id": m.get("conditionId", m.get("id")),
+                    "question": m.get("question"),
+                    "token_side": "YES",
+                    "tokens": tokens
+                }
+            if len(tokens) > 1:
+                token_map[tokens[1]] = {
+                    "market_id": m.get("conditionId", m.get("id")),
+                    "question": m.get("question"),
+                    "token_side": "NO",
+                    "tokens": tokens
+                }
+                
+        return token_map
+
+
     def _score_and_rank(self, markets: list[dict]) -> list[dict]:
         """
         ⚔️ WARRIOR SCORING — Her markete puan ver, en iyi hedefler üste.
