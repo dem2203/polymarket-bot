@@ -842,11 +842,11 @@
       "kelly_fraction": 0.0404,
       "edge": 0.47500000000000003,
       "reasoning": "Near resolution, high volatility. Market currently priced bullishly at 0.93 for UP. Bitcoin hovering around critical psychological levels. No clear directional momentum in last 24h. Small chance of late price movement before market close.",
-      "outcome": "OPEN",
-      "exit_price": 0.0,
+      "outcome": "LOSS",
+      "exit_price": 0.07499999999999996,
       "pnl": 0.0,
       "opened_at": 1771074749.945578,
-      "closed_at": 0.0,
+      "closed_at": 1771089523.7430797,
       "cycle_number": 14,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
@@ -876,5 +876,5 @@
     }
   ],
   "daily_reviews": [],
-  "last_saved": 1771081831.7927527
+  "last_saved": 1771089523.7436616
 }
