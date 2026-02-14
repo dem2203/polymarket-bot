@@ -623,9 +623,18 @@ class PolymarketBot:
                                 market_prices[market_id] = float(price_list[1]) if len(price_list) > 1 else 1.0 - float(price_list[0])
                             logger.debug(f"✅ Fiyat güncellendi: {market_id[:12]}... = ${market_prices[market_id]:.3f}")
                     else:
-                        # Fallback: Entry price kullan (güncel fiyat bilinmiyor)
-                        logger.warning(f"⚠️ Market detay yok: {market_id[:12]}... - Entry price kullanılıyor")
-                        market_prices[market_id] = position.entry_price
+                        # Fallback: CLOB Midpoint Check
+                        # Gamma API başarısızsa, direkt CLOB order book'tan fiyat al.
+                        # Bu, Stop-Loss'un çalışmasını sağlar.
+                        clob_price = self.executor.get_token_price(position.token_id)
+                        if clob_price is not None:
+                             market_prices[market_id] = clob_price
+                             logger.info(f"⚠️ Market detay yok, CLOB fiyatı alındı: {market_id[:12]}... = ${clob_price:.3f}")
+                        else:
+                             # Hiçbir yerden fiyat alınamadı - mecburen Entry Price (ama logla)
+                             logger.warning(f"❌ Fiyat bilinemiyor: {market_id[:12]}... - Entry price kullanılıyor")
+                             market_prices[market_id] = position.entry_price
+
             except Exception as e:
                 logger.debug(f"Fiyat güncelleme hatası {market_id[:12]}...: {e}")
 
@@ -685,15 +694,16 @@ class PolymarketBot:
                                     "reason": f"EXPIRY_WEAK (<6h, PnL={pnl_pct:.1%})",
                                 })
 
-                        # 3. Last 24 Hours: Stop Loss Tighten (-10%)
+                        # 3. Dynamic Time Stop: <24h ve PnL < -5% -> SAT
+                        # Beklemenin anlamı yok, zarar büyümesin.
                         elif hours_rem < 24.0:
-                             if pnl_pct < -0.10:
+                             if pnl_pct < -0.05:
                                  expiry_exits.append({
                                     "market_id": market_id,
                                     "token_id": position.token_id,
                                     "shares": position.shares,
                                     "price": price,
-                                    "reason": f"EXPIRY_STOP_TIGHTEN (<24h, PnL={pnl_pct:.1%})",
+                                    "reason": f"TIME_STOP (<24h, PnL={pnl_pct:.1%})",
                                 })
 
                 logger.info(

@@ -44,6 +44,17 @@ class MarketScanner:
         self.min_volume = settings.min_volume
         self.min_liquidity = settings.min_liquidity
         self.max_markets = settings.max_markets_per_scan
+        
+        # ⛔ BLACKLIST: Kumar ve Yüksek Riskli Marketler
+        # Bu kelimeleri içeren marketler ASLA taranmayacak.
+        self.BLACKLIST_KEYWORDS = [
+            "up or down",      # Binary gambling (Coin flip)
+            "above", "below",  # Short term technicals
+            "tweet", "mention", "post", # Social media noise
+            "will elon",       # Musk gambling
+            "daily",           # Too short term
+            "february 14",     # Specific daily expirations (Example)
+        ]
 
     async def scan_all_markets(self, skip_filters: bool = False) -> list[dict]:
         """

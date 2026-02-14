@@ -154,7 +154,8 @@ class TradeExecutor:
         MIN_ORDER_SIZE_USD = 5.0 # Güvenli eşik
         
         # Eğer hesaplanan miktar $5'in altındaysa ve bakiye yetiyorsa -> $5'e tamamla
-        if current_size < MIN_ORDER_SIZE_USD:
+        # ANCAK: Eğer size 0 ise (Kelly reddettiyse), işlem açma!
+        if current_size > 0 and current_size < MIN_ORDER_SIZE_USD:
             # Bakiyeyi kontrol et
             balance = self.get_balance()
             if balance > MIN_ORDER_SIZE_USD:
@@ -164,6 +165,9 @@ class TradeExecutor:
             else:
                  logger.warning(f"⚠️ Min lot ($5) için bakiye yetersiz: ${balance:.2f}")
                  # Yine de denesin, belki limit $1'dir.
+        elif current_size <= 0:
+            logger.info(f"⏭️ İşlem boyutu 0 (Kelly Red) — Pas geçiliyor.")
+            return None
         
         try:
             # 4. Create Order
@@ -368,6 +372,38 @@ class TradeExecutor:
             "live": live,
             "total_volume": round(total_volume, 2),
         }
+
+    def get_token_price(self, token_id: str) -> Optional[float]:
+        """
+        CLOB üzerinden anlık token fiyatı (Midpoint) getir.
+        Stop-Loss için Gamma API yedeği.
+        """
+        if not self.client or self.dry_run:
+            return None
+
+        try:
+            # 1. Order Book Getir
+            book = self.client.get_order_book(token_id)
+            
+            # Midpoint hesapla
+            ask = float(book.asks[0].price) if book.asks else 0.0
+            bid = float(book.bids[0].price) if book.bids else 0.0
+            
+            if ask > 0 and bid > 0:
+                midpoint = (ask + bid) / 2
+                return midpoint
+            elif ask > 0:
+                return ask
+            elif bid > 0:
+                return bid
+            
+            # 2. Last Trade fallback (Eğer order book boşsa)
+            # Şu an client kütüphanesinde direkt last_trade olmayabilir.
+            return None
+
+        except Exception as e:
+            # logger.debug(f"CLOB fiyat hatası ({token_id}): {e}")
+            return None
 
 
 

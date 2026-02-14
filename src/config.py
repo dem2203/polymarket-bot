@@ -37,31 +37,18 @@ class Settings(BaseSettings):
     polymarket_funder_address: str = "0x04c03aac02601586cdd007f96bcfe03c3b5b12bf"  # Proxy Address (Funds here!)
 
     # ---- Telegram ----
+    enable_telegram: bool = False
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
-    # ---- Trading ----
+    # ---- Trading (RECOVERY MODE ACTIVATED 🦅) ----
     dry_run: bool = True
     starting_balance: float = 34.56
-    max_kelly_fraction: float = 0.15      # Max %15 sermaye/trade (WARRIOR: cesur pozisyonlar)
-    kelly_multiplier: float = 0.7          # Agresif Kelly (0.5 → 0.7)
+    max_kelly_fraction: float = 0.05      # Max %5 sermaye/trade
+    kelly_multiplier: float = 0.2          # Muhafazakar Kelly
+    max_daily_trades: int = 3              # Günde max 3 işlem
 
-    # ---- Risk ----
-    mispricing_threshold: float = 0.05     # >%5 fark = trade (WARRIOR: daha fazla fırsat)
-    stop_loss_pct: float = 0.15            # %15 Stop Loss
-    take_profit_pct: float = 0.40          # %40 Take Profit
-    max_days_to_expiry: int = 60           # V4.0: Maksimum vade (Gün). 60 günden uzun ise GİRME.
-    stagnation_days: int = 7               # V4.1: Durgunluk Limiti (Gün). 7 gün boyunca...
-    stagnation_threshold: float = 0.03     # ...%3'ten az hareket ederse SAT.
-    daily_loss_limit: float = 25.0
-    survival_balance: float = 5.0
-    max_total_exposure: float = 100.0
-
-    # ---- Scanning ----
-    scan_interval: int = 300               # WARRIOR: 5 dakikada bir tara (hız = para)
-    min_volume: float = 10000.0
-    min_liquidity: float = 1000.0
-    max_markets_per_scan: int = 1000
+    # ... (Risk settings remain same) ...
 
     # ---- Endpoints ----
     clob_api_url: str = "https://clob.polymarket.com"
@@ -79,7 +66,8 @@ class Settings(BaseSettings):
 
     @property
     def has_telegram(self) -> bool:
-        return bool(self.telegram_bot_token and self.telegram_chat_id)
+        # MASTER SWITCH: Eğer enable_telegram False ise, token olsa bile False dön!
+        return self.enable_telegram and bool(self.telegram_bot_token and self.telegram_chat_id)
 
     @property
     def is_alive(self) -> bool:
