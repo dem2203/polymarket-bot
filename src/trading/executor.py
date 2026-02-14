@@ -130,7 +130,8 @@ class TradeExecutor:
             return None
 
         # 1. Token ID Verification
-        token_id = signal.token_id or self._get_token_id(signal)
+        # TradeSignal class usually stores tokens in a list, not as a direct attribute
+        token_id = self._get_token_id(signal)
         if not token_id:
             logger.error(f"❌ Token ID bulunamadı: {signal.question}")
             return None
