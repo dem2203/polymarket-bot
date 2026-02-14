@@ -873,6 +873,52 @@
       "cycle_number": 25,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
+    },
+    {
+      "trade_id": "T-00039",
+      "market_id": "0x08110f7794c80d4094307f6218df321fdc36480a5856cbfc1c1f56854935400f",
+      "question": "Bitcoin Up or Down - February 14, 2PM ET",
+      "category": "crypto",
+      "direction": "BUY_NO",
+      "entry_price": 0.345,
+      "fair_value_claude": 0.45,
+      "fair_value_deepseek": 0.5,
+      "confidence": 0.6,
+      "position_size": 1.7249999999999999,
+      "kelly_fraction": 0.1134,
+      "edge": 0.20500000000000002,
+      "reasoning": "BTC price near resolution time shows high volatility. Recent market sentiment mixed. Less than 30 minutes to close means minimal predictive signal. High uncertainty around exact price movement.",
+      "outcome": "OPEN",
+      "exit_price": 0.0,
+      "pnl": 0.0,
+      "opened_at": 1771097865.3479981,
+      "closed_at": 0.0,
+      "cycle_number": 50,
+      "ai_was_correct": false,
+      "edge_accuracy": 0.0
+    },
+    {
+      "trade_id": "T-00040",
+      "market_id": "0x833a385aeb210fb7ee16e1dc335ee425b06d4d72050401c60f8e4c58a1183449",
+      "question": "Ethereum Up or Down - February 14, 2PM ET",
+      "category": "crypto",
+      "direction": "BUY_NO",
+      "entry_price": 0.44499999999999995,
+      "fair_value_claude": 0.45,
+      "fair_value_deepseek": 0.5,
+      "confidence": 0.65,
+      "position_size": 2.2249999999999996,
+      "kelly_fraction": 0.0442,
+      "edge": 0.10500000000000004,
+      "reasoning": "Event is extremely close to resolution (23 minutes remaining). Crypto markets volatile near hourly close. Binance ETH/USDT price movement suggests slight bearish momentum. Market seems slightly overpricing 'Up' scenario. High uncertainty with minimal time left means small edge toward 'Down'.",
+      "outcome": "OPEN",
+      "exit_price": 0.0,
+      "pnl": 0.0,
+      "opened_at": 1771097865.5836742,
+      "closed_at": 0.0,
+      "cycle_number": 50,
+      "ai_was_correct": false,
+      "edge_accuracy": 0.0
     }
   ],
   "daily_reviews": [
@@ -897,5 +943,5 @@
       "timestamp": 1771096575.303885
     }
   ],
-  "last_saved": 1771096575.3044991
+  "last_saved": 1771097865.584265
 }
