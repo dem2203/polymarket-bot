@@ -865,16 +865,16 @@
       "kelly_fraction": 0.0321,
       "edge": 0.08500000000000002,
       "reasoning": "Crypto price movement is highly volatile. Currently ETH trading at ~$2,300. Recent market sentiment slightly bearish but no definitive short-term catalyst. Market pricing suggests near 50/50, but small lean towards potential downside. Key watch: Bitcoin market sentiment, upcoming ETH options expiry, potential macro economic news that could impact crypto. No strong signal to make an ultra-confident call.",
-      "outcome": "OPEN",
-      "exit_price": 0.0,
+      "outcome": "LOSS",
+      "exit_price": 0.495,
       "pnl": 0.0,
       "opened_at": 1771081831.7922068,
-      "closed_at": 0.0,
+      "closed_at": 1771096568.8700805,
       "cycle_number": 25,
       "ai_was_correct": false,
       "edge_accuracy": 0.0
     }
   ],
   "daily_reviews": [],
-  "last_saved": 1771089523.7436616
+  "last_saved": 1771096568.8708465
 }
