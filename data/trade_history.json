@@ -961,7 +961,27 @@
       "reviewed_at": 1771175889.3394504,
       "trades_reviewed": 2,
       "timestamp": 1771175889.3394585
+    },
+    {
+      "performance_grade": "F",
+      "lesson": "Extreme short-term market predictions are nearly impossible. Reduce trade frequency near resolution times and improve edge calculation.",
+      "strong_categories": [],
+      "weak_categories": [
+        "crypto"
+      ],
+      "edge_calibration": "too_aggressive",
+      "recommended_actions": [
+        "Extend prediction timeframes",
+        "Implement stricter entry criteria",
+        "Develop more robust market sentiment analysis",
+        "Reduce position sizes for high-volatility markets"
+      ],
+      "confidence_adjustment": "decrease",
+      "risk_adjustment": "decrease_position_sizes",
+      "reviewed_at": 1771178324.1321983,
+      "trades_reviewed": 2,
+      "timestamp": 1771178324.1322045
     }
   ],
-  "last_saved": 1771175889.340502
+  "last_saved": 1771178324.1327267
 }
