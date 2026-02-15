@@ -48,8 +48,16 @@ class Settings(BaseSettings):
     kelly_multiplier: float = 0.2          # Muhafazakar Kelly
     max_daily_trades: int = 3              # Günde max 3 işlem
 
-    # ... (Risk settings remain same) ...
-
+    # ---- Risk ----
+    mispricing_threshold: float = 0.08     # >%8 fark = trade (Sadece çok net fırsatlar)
+    stop_loss_pct: float = 0.10            # %10 Stop Loss (Sıkı)
+    take_profit_pct: float = 0.30          # %30 Take Profit (Hızlı kâr al)
+    max_days_to_expiry: int = 45           # V vadeyi kısalttık (Dead money yok)
+    stagnation_days: int = 3               # 3 gün hareket etmeyenle vedalaş
+    stagnation_threshold: float = 0.02     
+    daily_loss_limit: float = 5.0          # Günlük max $5 kayıp
+    survival_balance: float = 5.0
+    
     max_total_exposure: float = 80.0       # %80 Exposure (Nakit tut)
 
     # ---- Scanning ----
