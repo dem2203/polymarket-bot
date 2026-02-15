@@ -202,6 +202,11 @@ class DeepSeekValidator:
 
         avg_conf = (claude_c + ds_c) / 2
 
+        # V4.4 SNIPER MODE: Stricter Consensus
+        max_diff_tolerance = 0.30
+        if settings.sniper_mode:
+            max_diff_tolerance = 0.20  # Daha sıkı (max %20 fark)
+
         if not direction_match:
             # İki AI farklı yönde → SKIP
             recommendation = "SKIP"
@@ -210,8 +215,8 @@ class DeepSeekValidator:
             # Yakın tahminler → güçlü sinyal
             recommendation = "TRADE"
             consensus = True
-        elif prob_diff <= 0.30:
-            # Orta fark → trade ama dikkatli
+        elif prob_diff <= max_diff_tolerance:
+            # Orta fark → trade ama dikkatli (Sniper modda 0.15-0.20 arası)
             recommendation = "REDUCE"
             consensus = True
         else:

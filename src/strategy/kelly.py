@@ -58,28 +58,11 @@ class KellySizer:
         direction: str,
         confidence: float = 0.7,
         hours_to_expiry: float = 9999,
+        is_sniper_trade: bool = False,
     ) -> dict:
         """
         ⚔️ WARRIOR Kelly — survival-aware pozisyon hesabı.
-
-        Args:
-            fair_value: AI'ın hesapladığı olasılık (0-1)
-            market_price: Mevcut market fiyatı (0-1)
-            balance: Toplam bakiye ($)
-            direction: "BUY_YES" veya "BUY_NO"
-            confidence: AI'ın güven skoru (0-1)
-            hours_to_expiry: Bitiş tarihine kalan saat
-
-        Returns:
-            {
-                "position_size": float ($),
-                "shares": float,
-                "kelly_fraction": float,
-                "adjusted_fraction": float,
-                "price": float,
-                "side": str,
-                "token_side": str,
-            }
+        V4.4: Sniper Mode support.
         """
         if direction == "BUY_YES":
             p = fair_value
@@ -89,21 +72,22 @@ class KellySizer:
             price = 1.0 - market_price
 
         # 1. Edge Calculation
-        # Edge = (Probability * Odds) - 1
-        # Odds = (1 / market_price)
-        # Simplified: Edge = fair_value - market_price
         edge = p - price
         
-        # 2. V4.2 SNIPER MODU: Dynamic Multiplier 🎯
-        # Standart multiplier yerine, fırsatın kalitesine göre değişen bir çarpan.
+        # 2. V4.4 SNIPER MODU: Dynamic Multiplier 🎯
+        # Config'den gelen sniper_multiplier (0.5) veya kelly_multiplier (0.2) kullanılır.
         
-        base_multiplier = self.multiplier # Default 0.7 (from config)
+        base_multiplier = self.multiplier # Default (0.2)
+
+        if settings.sniper_mode and is_sniper_trade:
+            base_multiplier = settings.sniper_multiplier # 0.5 (Sniper)
+            logger.info(f"🎯 SNIPER MODE: High Conviction Trade -> Multiplier boosted to {base_multiplier}x")
+        
         dynamic_multiplier = base_multiplier
 
-        # BONUS: Büyük Fırsat (>%15 edge)
-        if edge >= 0.15:
-            dynamic_multiplier = 1.0 # FULL KELLY (Max Aggression)
-            logger.info(f"🎯 SNIPER BONUS: Edge {edge:.1%} > %15 -> Full Kelly (1.0x)")
+        # BONUS: Büyük Fırsat (>%15 edge) - SADECE Sniper değilse uygula (Sniper zaten yüksek)
+        if edge >= 0.15 and not is_sniper_trade:
+            dynamic_multiplier = min(dynamic_multiplier * 1.5, 0.5) # Max 0.5
             
         # PENALTY: Düşük Güven (<%60)
         if confidence < 0.60:
@@ -143,10 +127,10 @@ class KellySizer:
         adjusted_fraction = kelly_fraction * dynamic_multiplier * survival_mult * time_mult
 
         # Max fraction cap uygula
-        kelly_fraction = min(kelly_fraction, self.max_fraction)
+        final_fraction = min(adjusted_fraction, self.max_fraction)
 
         # Pozisyon büyüklüğü ($)
-        position_size = balance * kelly_fraction
+        position_size = balance * final_fraction
 
         # Minimum $1, maximum kontrol
         if position_size < 1.0:

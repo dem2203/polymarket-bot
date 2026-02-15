@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     kelly_multiplier: float = 0.2          # Muhafazakar Kelly
     max_daily_trades: int = 3              # Günde max 3 işlem
 
+    # ---- Sniper Mode (V4.4) ----
+    sniper_mode: bool = True               # Nokta atışı modu aktif mi?
+    sniper_multiplier: float = 0.5         # Sniper sinyaline basılacak Kelly (0.5x)
+
+
     # ---- Risk ----
     mispricing_threshold: float = 0.08     # >%8 fark = trade (Sadece çok net fırsatlar)
     stop_loss_pct: float = 0.10            # %10 Stop Loss (Sıkı)

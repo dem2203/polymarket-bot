@@ -204,6 +204,18 @@ class MispricingStrategy:
 
         # 5. Kelly Criterion (adaptive multiplier + time bonus)
         hours_to_expiry = market.get("hours_to_expiry", 9999)
+        
+        # V4.4 SNIPER CHECK 🎯
+        # "Sniper" olmak için:
+        # 1. Sniper Mode açık
+        # 2. Dual-AI Consensus var
+        # 3. Confidence >= %90 (Çok emin)
+        is_sniper_trade = False
+        if settings.sniper_mode and consensus and deepseek_fv > 0:
+            if confidence >= 0.90:
+                is_sniper_trade = True
+                logger.info(f"🎯 SNIPER SİNYAL TESPİT EDİLDİ! ({market['question'][:40]}...)")
+
         kelly_result = self.kelly.calculate(
             fair_value=combined_fv,
             market_price=yes_price,
@@ -211,29 +223,40 @@ class MispricingStrategy:
             direction=direction,
             confidence=confidence,
             hours_to_expiry=hours_to_expiry,
+            is_sniper_trade=is_sniper_trade,
         )
 
         # Adaptive multiplier uygula
         original_size = kelly_result["position_size"]
-        adjusted_size = original_size * (kelly_multiplier / 0.5)  # 0.5 = default
+        # Default 0.5 ile hesaplanan raw size'ı configdeki multiplier ile oranla
+        # Fakat Sniper Mode zaten içeride multiplier'ı seçti.
+        # Bu satır V3'ten kalma ve Sniper Mode ile çakışabilir.
+        # KellySizer zaten doğru multiplier (0.5 veya 0.2) kullandı.
+        # Sadece "Adaptive Kelly" (trade sayısına göre) varsa onu dikkate almalıyız?
+        # Main.py'den gelen kelly_multiplier argümanı "Adaptive" olanı taşıyor.
         
-        # V3.7: CONFIDENCE BOOST (User Request - Be aggressive on high confidence!)
-        confidence_multiplier = 1.0
+        # Eğer Adaptive Kelly (main.py) kullanılıyorsa, KellySizer'ın kullandığı base'i buna göre scale etmeliyiz.
+        # Ancak Sniper Mode bunu override etmeli mi?
+        # Karar: Sniper Mode her zaman Settings'deki Sniper Multiplier'ı (0.5) kullanır.
+        # Normal mod ise Main.py'den gelen Adaptive Multiplier'ı kullanır.
         
-        if consensus and deepseek_fv > 0:  # Dual-AI agreement
-            if confidence >= 0.90:
-                # Ultra-high confidence + dual consensus = 2x position!
-                confidence_multiplier = 2.0
-                logger.info(f"🚀 V3.7 ULTRA BOOST: 2x position (confidence={confidence:.0%}, dual-AI consensus)")
-            elif confidence >= 0.80:
-                # High confidence + dual consensus = 1.5x
-                confidence_multiplier = 1.5
-                logger.info(f"📈 V3.7 HIGH BOOST: 1.5x position (confidence={confidence:.0%}, dual-AI consensus)")
-        elif confidence >= 0.85:  # Single AI but very high confidence
-            confidence_multiplier = 1.3
-            logger.info(f"⬆️ V3.7 SOLO BOOST: 1.3x position (confidence={confidence:.0%}, solo AI)")
+        adjusted_size = original_size
         
-        adjusted_size *= confidence_multiplier
+        if not is_sniper_trade:
+             # Normal trade: Adaptive Scaling
+             # KellySizer default olarak settings.kelly_multiplier (0.2) kullandı.
+             # Eğer main.py bize farklı bir multiplier (örn 0.5) gönderdiyse scale et.
+             # Scaling Factor = Passed Multiplier / Config Multiplier
+             if settings.kelly_multiplier > 0:
+                 scale_factor = kelly_multiplier / settings.kelly_multiplier
+                 adjusted_size = original_size * scale_factor
+        
+        # V4.4: Old Boost Logic REMOVED (Clean implementation)
+        # Sadece loglama amacıyla
+        if is_sniper_trade:
+             logger.info(f"🚀 SNIPER EXECUTION: {adjusted_size:.2f} (0.5x Kelly)")
+             
+        adjusted_size *= 1.0 # No extra boost
         
         # Hard cap: max 20% of capital per trade (even with boost)
         MAX_POSITION_PCT = 0.20

@@ -134,6 +134,19 @@ class MarketScanner:
                 if liquidity < self.min_liquidity:
                     continue
 
+                # ⛔ BLACKLIST CHECK (V4.4 FIX)
+                # Soru metni veya description içinde yasaklı kelime var mı?
+                text_content = (m.get("question", "") + " " + m.get("description", "")).lower()
+                is_blacklisted = False
+                for kw in self.BLACKLIST_KEYWORDS:
+                    if kw in text_content:
+                        is_blacklisted = True
+                        # logger.debug(f"⛔ Blacklisted ({kw}): {m.get('question', '')[:30]}...")
+                        break
+                
+                if is_blacklisted:
+                    continue
+
                 # Token parse logic
                 tokens = m.get("clobTokenIds", m.get("tokens", []))
 
