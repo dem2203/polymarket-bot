@@ -50,6 +50,14 @@ class Settings(BaseSettings):
 
     # ... (Risk settings remain same) ...
 
+    max_total_exposure: float = 80.0       # %80 Exposure (Nakit tut)
+
+    # ---- Scanning ----
+    scan_interval: int = 600               # 10 dakikada bir tara (Sakinleş)
+    min_volume: float = 50000.0            # Sadece çok likit marketler
+    min_liquidity: float = 5000.0
+    max_markets_per_scan: int = 500
+
     # ---- Endpoints ----
     clob_api_url: str = "https://clob.polymarket.com"
     gamma_api_url: str = "https://gamma-api.polymarket.com"
