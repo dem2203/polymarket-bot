@@ -941,7 +941,27 @@
       "reviewed_at": 1771096575.3038762,
       "trades_reviewed": 19,
       "timestamp": 1771096575.303885
+    },
+    {
+      "performance_grade": "F",
+      "lesson": "Current predictive model is fundamentally broken. High uncertainty in short-term crypto predictions requires complete strategy reengineering.",
+      "strong_categories": [],
+      "weak_categories": [
+        "crypto"
+      ],
+      "edge_calibration": "too_aggressive",
+      "recommended_actions": [
+        "Reduce time horizon for crypto predictions",
+        "Develop more robust volatility filtering mechanism",
+        "Implement stricter entry criteria with tighter confidence thresholds",
+        "Add secondary confirmation signals before trade execution"
+      ],
+      "confidence_adjustment": "decrease",
+      "risk_adjustment": "decrease_position_sizes",
+      "reviewed_at": 1771175889.3394504,
+      "trades_reviewed": 2,
+      "timestamp": 1771175889.3394585
     }
   ],
-  "last_saved": 1771097865.584265
+  "last_saved": 1771175889.340502
 }
